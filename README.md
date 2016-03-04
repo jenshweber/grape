@@ -60,7 +60,10 @@ This rule also deletes matched graph elements.
 
 ## Rule semantics
 
-Grape will by default attempt to find an isomorphic match of the _reader_ pattern in the host graph. 
+Grape will by default attempt to find an isomorphic match of the _reader_ pattern in the host graph. Consider the application of the our above rewrite rule (example 4) on the followig host graph.
+![graph1](https://cloud.githubusercontent.com/assets/1776629/13522111/3d4e4956-e1a2-11e5-9d07-043e0ede3860.png)
+The rule replaces 'works_for' edges with a node and two new edges. Given the (default) isomorphic matching semantics, the rule is applicable only once, namely on the edge between _Flo_ and _Anke_.
+
 
 
 ## License
