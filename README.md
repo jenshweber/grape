@@ -2,7 +2,7 @@
 
 A Clojure library designed to provide support for graph rewriting based on a persistent graph store.
 
-## Usage
+## Rule definition
 
 Graph rewriting rules are defined using the 'rule' form. Rules consist of three parts:
 - the _read_ specifies the graph pattern to be matched in the host graph
@@ -57,6 +57,11 @@ This rule also deletes matched graph elements.
                   (edge 'e1 {:label 'offers :src 'n3 :tar 'n2})
                   (edge 'e2 {:label 'takes :src 'n3 :tar 'n1}))}))
 ```
+
+## Rule semantics
+
+Grape will by default attempt to find an isomorphic match of the _reader_ pattern in the host graph. 
+
 
 ## License
 
