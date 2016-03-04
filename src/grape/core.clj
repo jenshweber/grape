@@ -9,7 +9,7 @@
 
 (def dburi "http://localhost:7474/db/data/")
 (def dbusr "neo4j")
-(def dbpw "socke")
+(def dbpw "neo4j")
 
 (def conn (nr/connect dburi dbusr dbpw))
 
