@@ -2,6 +2,7 @@
   (:require [clojurewerkz.neocons.rest :as nr]
             [clojurewerkz.neocons.rest.cypher :as cy]
             [clojure.math.combinatorics :as combo]
+            [clojure.data.json :as json]
             )
   (:use [clojure.string :only (join split)])
   )
@@ -23,34 +24,18 @@
 ; DSL forms ---------
 ; -------------------
 
-(defn labels [& ls]
-  ls
-  )
-
-
-(defn asserts [as]
-  "DSL form for specifying an assertion."
-  as
-  )
 
 (defn node
   "DSL form for specifying a node"
-  ([id labels as]
-   ['node {:id id :labels labels :ass as}])
-  ([id labels]
-   (node id labels '()))
-  ([id]
-   (node id '() '())))
+  ([id rest]
+   ['node (assoc rest :id id)])
+  ([id ]
+   (node id {})))
 
 (defn edge
   "DSL form for specifying an edge"
-  ([id labels src tar ass]
-   ['edge {:id id :labels labels :src src :tar tar :ass ass}])
-  ([id labels src tar]
-   (edge id labels src tar '()))
-  ([id src tar]
-   (edge id '() src tar '()))
-  )
+  [id rest]
+   ['edge (assoc rest :id id)])
 
 
 (defn pattern
@@ -60,63 +45,61 @@
     ['pattern {:sem :homo :els (rest xs)}]
     ['pattern {:sem :iso :els  xs}]
     )
-)
+  )
 
 
-;(combo/combinations '( "n2" "n3") 2)
+(defn rule
+  "DSL form for specifying a graph transformation"
+  [m]
+  (if (not (contains? m :theory))
+    (assoc m :theory 'spo)
+    m
+    )
+  )
 
-;(gen-constraint-isomorphism   '( "n2" "n3" "n4" "n5") )
 
 ;---------------------------
 ; DSL to Cypher translation
 ;---------------------------
 
-
-(defn ass->cypher [a]
-  "Helper funtion for asss->cypher"
-  (str (name (first a)) ":\"" (second a) "\""))
-
-(defn asss->cypher [as]
+(defn asserts->cypher [as]
   "Translate a map of assertions to a Cypher code fragment"
   (if (empty? as)
     ""
-    (str " {" (reduce (partial str-sep " ") (map ass->cypher (seq as))) "}")
+    (str " {" (reduce (partial str-sep ", ") (map (fn [[k v]] (str (name k) ":\"" v "\"")) as)) "}")
     ))
 
 
 
-(defn labels->cypher [l]
-  "translate a list of labels to Cypher"
-  (if (empty? l)
-    ""
-    (str (reduce str l))))
-
-
-(defn node->cypher [n]
-  (let [c (second n)]
-    (str "MATCH (" (:id c)
-         (labels->cypher (:labels c))
-         (asss->cypher (:ass c))
-
+(defn node->cypher [m n]
+  (let [c (second n)
+        s (if (= m :match) " MATCH" " CREATE")]
+    (str s " (" (:id c)
+         (let [l (:label c)]
+           (if (nil? l)
+             ""
+             (str ":" l)))
+         (asserts->cypher (:asserts c))
          ")"
          )))
 
-(defn edge->cypher [e]
-  (let [c (second e)]
-    (str "MATCH (" (:src c) ")-[" (:id c)
-         (labels->cypher (:labels c))
-         (asss->cypher (:ass c))
+(defn edge->cypher [m e]
+  (let [c (second e)
+        s (if (= m :match) " MATCH" " CREATE")]
+    (str s " (" (:src c) ")-[" (:id c)
+         (let [l (:label c)]
+           (if (nil? l)
+             ""
+             (str ":" l)))
+         (asserts->cypher (:ass c))
          "]->(" (:tar c) ")")))
 
-
-(edge->cypher (edge 'e1 (labels :label1 :label2) 's 't (asserts {:key1 "val1" :key2 "val2"}) ))
-
-(defn graphelem->cypher [e]
+(defn graphelem->cypher [m e]
   "Translate a graph element to cipher - either node or edge"
   (let [t (first e)]
     (cond
-     (= 'node t) (node->cypher e)
-     (= 'edge t) (edge->cypher e)
+     (= 'node t) (node->cypher m e)
+     (= 'edge t) (edge->cypher m e)
      :else
      (throw (Exception. "Invalid graph element"))
      )))
@@ -145,8 +128,8 @@
   (filter (fn [x] (= k (first x))) c))
 
 
-(defn pattern->cypher [p]
-  "translate a graph pattern to cypher"
+(defn pattern->cypher [m p]
+  "translate a graph pattern to cypher matching query"
   (let [s (second p)
         els (:els s)
         sem (:sem s)
@@ -155,14 +138,45 @@
     (if (nil? els)
       ""
       (str
-       (reduce (partial str-sep " ") (map graphelem->cypher els))
-       (if (= :iso sem)
-         (gen-constraint-isomorphism nids eids)
-         ""
-         )
-       " RETURN "
-       (reduce (partial str-sep ", ") (concat nids eids))
-       ))))
+       (reduce (partial str-sep " ") (map (partial graphelem->cypher m) els))
+       (if (= m :match)
+           (str
+            (if (= :iso sem)
+              (gen-constraint-isomorphism nids eids)
+              ""
+              )
+            " RETURN "
+            (reduce (partial str-sep ", ") (concat nids eids)))
+           ""
+           )))))
+
+(defn redex->cypher [r]
+  "recall a redex by node and edge IDs"
+  (let [nnames (keys (:nodes r))
+        enames (keys (:edges r))
+        idmap (map (fn [[k v]] [k (:id (:metadata v))]) (concat (:nodes r) (:edges r)))]
+    (str
+     (reduce str (map (fn [x] (str " MATCH (" x ")")) nnames))
+     (reduce str (map (fn [x] (str " MATCH ()-[" x "]->()")) enames))
+     " WHERE "
+     (reduce (partial str-sep " AND") (map (fn [[k v]] (str " id(" k ")=" v)) idmap))
+     )
+    ))
+
+
+
+(defn rule->cypher [r]
+  "translate a rule to cypher"
+  (str
+   (if (contains? r :delete) (str (if (= (:theory r) 'dpo)
+                                    " DELETE "
+                                    " DETACH DELETE ")
+                                  (reduce (partial str-sep ", ") (:delete r)))
+     "")
+   (if (contains? r :create) (pattern->cypher :create (:create r))
+     "")
+   ))
+
 
 
 ;-----------------------
@@ -170,5 +184,49 @@
 ;-----------------------
 
 (defn match [m]
-  (cy/tquery conn (str (pattern->cypher m) " LIMIT 1")
-             ))
+  "match a pattern in the host graph"
+  (if (nil? (:els (second m)))
+    '()
+    (let [m (cy/tquery conn (str (pattern->cypher :match m) " LIMIT 1"))]
+      (if (empty? m)
+        m
+        (let [r (first m)
+              isNode? (fn [x] (re-find #"node" (:self x)))
+              nodes (filter (fn [[k v]] (isNode? v)) r)
+              edges (filter (fn [[k v]] (not (isNode? v))) r)
+              remove-unneeded (fn [x]
+                                (zipmap (keys x)
+                                        (map (fn [y] (select-keys y [:metadata :data]))
+                                             (vals x))))]
+          {:nodes (remove-unneeded nodes) :edges (remove-unneeded edges)}
+          )))))
+
+
+(defn apply-rule [r]
+  "apply a rule to a host graph"
+  (let [reader (:read r)
+        redex (if (not (nil? reader))
+                (let [m (match reader)]
+                  (if (empty? m)
+                    nil
+                    (redex->cypher m)))
+                "")]
+    (if (nil? redex)
+      nil
+      (let [s (str redex
+                   (if (contains? r :delete) (str (if (= (:theory r) 'dpo)
+                                                    " DELETE "
+                                                    " DETACH DELETE ")
+                                                  (reduce (partial str-sep ", ") (:delete r)))
+                         "")
+                   (if (contains? r :create) (pattern->cypher :create (:create r))
+                         "")
+                   )]
+        (do
+          (println s)
+          (try
+            (cy/tquery conn s)
+            (catch Exception e
+              (str "Exception: " (.getMessage e)))))
+          ))))
+
