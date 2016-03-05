@@ -87,7 +87,7 @@ The above rule allows us to express our "self-employment" example.
 
 ### Example 5: A rule with _delete_
 
-This rule also deletes matched graph elements. In this case it replaces a "works_for" edge with a new "Contract" node and two edges.
+The following rule also deletes matched graph elements. In this case it replaces a "works_for" edge with a new "Contract" node and two edges.
 
 ```clojure
 (rule 'rewrite_contracts 
@@ -102,7 +102,26 @@ This rule also deletes matched graph elements. In this case it replaces a "works
                  (edge 'e1 {:label "employer" :src 'n3 :tar 'n2})
                  (edge 'e2 {:label "employee" :src 'n3 :tar 'n1}))})
 ```
-
+### Example 6: Dealing with "dangling" edges
+Consider the following rule whose purpose it is to "fire" an employee with a given name (by deleting the contract node). 
+```clojure
+(rule 'fire-employee ['name] 
+      {:read (pattern
+              (node 'emp {:label "Person" :asserts {:name 'name}})
+              (node 'con)
+              (edge 'e {:label "employee" :src 'con :tar 'emp}))
+       :delete ['con]})
+```
+But what happens to the 'employee' edge _e_ when the contract node _con_ is deleted? It can't be left "dangling", as that would result in an invalid graph. Graph transformation systems may be based on different theoretical foundations. Algebraic theories for graph transformation systems may be based on different approaches, including the so-called double pushout (DPO) approach and the single pushout (SPO) approach. We won't dive into the theory here, but what is important at this point is that these approaches differ in their treatment of "dangling" edges during node deletion. DPO rules will disallow dangling edges while SPO rules resolve dangling edges by also deleting them from the host graph. The default rule semantics is SPO in Grape. However, a different rule semantics can be specified. The following rule is identical to the previous but specifies DPO semantics. Applying it to our host graph will not be allowed if the application would cause any dangling edges.
+```clojure
+(rule 'fire-employee ['name] 
+      {:theory dpo
+       :read (pattern
+              (node 'emp {:label "Person" :asserts {:name 'name}})
+              (node 'con)
+              (edge 'e {:label "employee" :src 'con :tar 'emp}))
+       :delete ['con]})
+```
 
 
 Copyright © 2016 Jens Weber
