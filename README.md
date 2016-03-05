@@ -85,7 +85,7 @@ However, we cannot use it to express sitations where a person is self-employed, 
 ```
 The above rule allows us to express our "self-employment" example.
 
-### Example 4: A rule with _delete_
+### Example 5: A rule with _delete_
 
 This rule also deletes matched graph elements. In this case it replaces a "works_for" edge with a new "Contract" node and two edges.
 
