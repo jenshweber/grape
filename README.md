@@ -115,7 +115,7 @@ Consider the following rule whose purpose it is to "fire" an employee with a giv
 But what happens to the 'employee' edge _e_ when the contract node _con_ is deleted? It can't be left "dangling", as that would result in an invalid graph. Graph transformation systems may be based on different theoretical foundations. Algebraic theories for graph transformation systems may be based on different approaches, including the so-called double pushout (DPO) approach and the single pushout (SPO) approach. We won't dive into the theory here, but what is important at this point is that these approaches differ in their treatment of "dangling" edges during node deletion. DPO rules will disallow dangling edges while SPO rules resolve dangling edges by also deleting them from the host graph. The default rule semantics is SPO in Grape. However, a different rule semantics can be specified. The following rule is identical to the previous but specifies DPO semantics. Applying it to our host graph will not be allowed if the application would cause any dangling edges.
 ```clojure
 (rule 'fire-employee ['name] 
-      {:theory dpo
+      {:theory 'dpo
        :read (pattern
               (node 'emp {:label "Person" :asserts {:name 'name}})
               (node 'con)
