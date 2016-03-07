@@ -23,10 +23,12 @@ The following rule creates only one node. It has an empty _read_ and _delete_ pa
 ```
 The 'node' form is used to specify the node to be created. Note that Grape currently supports only one (optional) type label for nodes, but multiple (optional) property assigments (assert).
 
-Rules can be applied using the _apply-rule_ form. The above rule can be applied like so:
+Defining a rule results in the creation of a new function with the name of the rule. The rule can be applied by calling that function:
 ```clojure
-(apply-rule 'create-jens)
+(create-jens)
 ```
+The call to the rule function returns _true_ if (and only if) the rule application succeeds. 
+
 ### Example 2: Parameterized rules
 Our first example rule was not very versatile, since it could not generate different _persons_. This can be improved by using _parameterized_ rules. The following rule is more generic, as it takes the name of the person to be created as a parameter (p).
 ```clojure
@@ -37,7 +39,7 @@ Our first example rule was not very versatile, since it could not generate diffe
 ```
 Formal parameters must be actualized when the rule is applied. The rule application below creates a Person node with name "Flo".
 ```clojure
-(apply-rule 'create-person {'p "Flo"})
+(create-person {'p "Flo"})
 ```
 
 ### Example 3: A rule with a _reader_
@@ -52,7 +54,7 @@ The the next rule has a _read_ as well as a _create_ part. It matches two Person
                  (edge 'e {:label "parent_of" :src 'j :tar 'f} )
                  )})
 
-(apply-rule 'parent_of {'p "Jens" 'c "Flo"})
+(parent_of {'p "Jens" 'c "Flo"})
 ```
 
 ### Example 4: Isomorphic vs homomorphic rules
@@ -68,11 +70,11 @@ The following rule is similar to Example 3.
 ```
 It works fine when the _read_ part maps the two nodes in the pattern to two nodes in the host graph, for example:
 ```clojure
-(apply-rule 'works_for {'e "Flo" 's "Jens"})
+(works_for {'e "Flo" 's "Jens"})
 ```
 However, we cannot use it to express sitations where a person is self-employed, e.g.,
 ```clojure
-(apply-rule 'works_for {'e "Jens" 's "Jens"})
+(works_for {'e "Jens" 's "Jens"})
 ```
 (Note: We are assuming here that there is only one person with name "Jens", i.e., that the person's name is a unique identifier. In that case the above rule application will not find a valid match (and return _nil_). This is because Grape's rule matching engine will search for _isomorphic_ matches of the _read_ pattern in the host graph. This means that the nodes / edges in the read pattern must match to _distinct_ nodes / edges in the host graph. This matching semantics can be changed to _homomorphic_ matches by adding the :homo keyword to the definition of the reader pattern:
 ```clojure
@@ -91,8 +93,7 @@ The following rule also deletes matched graph elements. In this case it replaces
 
 ```clojure
 (rule 'rewrite_contracts 
-      { :theory
-        :read (pattern
+      {:read (pattern
                (node 'n1)
                (node 'n2)
                (edge 'e {:label "works_for" :src 'n1 :tar 'n2}))
