@@ -100,7 +100,7 @@
 
   (deftest test-rule->cypher
     (testing "Translation of rule to Cypher failed (1)"
-      (is (= (rule->cypher (rule {
+      (is (= (rule->cypher (rule 'rulename {
                                   :create (pattern
                                            (node 'n {:label 'label}))}))
               " CREATE (n:label)"
@@ -144,7 +144,7 @@
    (cy/tquery conn "match (n) detach delete n")
    (testing "Execution engine - apply-rule failed"
      (is (not (nil?
-          (apply-rule (rule {
+          (apply-rule (rule 'rulename {
                     :create (pattern
                              (node 'n {:label 'testlabel
                                        :asserts {:key "value" :key2 "value2"}}))})))))

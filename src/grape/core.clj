@@ -3,6 +3,7 @@
             [clojurewerkz.neocons.rest.cypher :as cy]
             [clojure.math.combinatorics :as combo]
             [clojure.data.json :as json]
+            [clojure.test :refer :all]
             )
   (:use [clojure.string :only (join split)])
   )
@@ -12,6 +13,7 @@
 (def dbpw "neo4j")
 
 (def conn (nr/connect dburi dbusr dbpw))
+(def gragra {})
 
 ; -------------------
 ; Utility functions
@@ -20,86 +22,59 @@
 
 (defn str-sep [s x y ] (str x s y))
 
-; -------------------
-; DSL forms ---------
-; -------------------
-
-
-(defn node
-  "DSL form for specifying a node"
-  ([id rest]
-   ['node (assoc rest :id id)])
-  ([id ]
-   (node id {})))
-
-(defn edge
-  "DSL form for specifying an edge"
-  [id rest]
-   ['edge (assoc rest :id id)])
-
-
-(defn pattern
-  "DSL form for specifying a graph pattern (reader)"
-  [& xs]
-  (if (= :homo (first xs))
-    ['pattern {:sem :homo :els (rest xs)}]
-    ['pattern {:sem :iso :els  xs}]
-    )
-  )
-
-
-(defn rule
-  "DSL form for specifying a graph transformation"
-  [m]
-  (if (not (contains? m :theory))
-    (assoc m :theory 'spo)
-    m
-    )
-  )
-
 
 ;---------------------------
 ; DSL to Cypher translation
 ;---------------------------
 
-(defn asserts->cypher [as]
+
+(defn resolve-const-or-par [scope x]
+  (if (symbol? x)
+    (if (contains? scope x)
+      (scope x)
+      x)
+    x))
+
+
+
+(defn asserts->cypher [s as]
   "Translate a map of assertions to a Cypher code fragment"
   (if (empty? as)
     ""
-    (str " {" (reduce (partial str-sep ", ") (map (fn [[k v]] (str (name k) ":\"" v "\"")) as)) "}")
+    (str " {" (reduce (partial str-sep ", ") (map (fn [[k v]] (str (name k) ":\"" (resolve-const-or-par s v) "\"")) as)) "}")
     ))
 
 
 
-(defn node->cypher [m n]
+(defn node->cypher [s m n]
   (let [c (second n)
-        s (if (= m :match) " MATCH" " CREATE")]
-    (str s " (" (:id c)
+        k (if (= m :match) " MATCH" " CREATE")]
+    (str k " (" (:id c)
          (let [l (:label c)]
            (if (nil? l)
              ""
-             (str ":" l)))
-         (asserts->cypher (:asserts c))
+             (str ":" (resolve-const-or-par s l))))
+         (asserts->cypher s (:asserts c))
          ")"
          )))
 
-(defn edge->cypher [m e]
+(defn edge->cypher [s m e]
   (let [c (second e)
-        s (if (= m :match) " MATCH" " CREATE")]
-    (str s " (" (:src c) ")-[" (:id c)
+        k (if (= m :match) " MATCH" " CREATE")]
+    (str k " (" (:src c) ")-[" (:id c)
          (let [l (:label c)]
            (if (nil? l)
              ""
-             (str ":" l)))
-         (asserts->cypher (:ass c))
+             (str ":" (resolve-const-or-par s l))))
+         (asserts->cypher s (:ass c))
          "]->(" (:tar c) ")")))
 
-(defn graphelem->cypher [m e]
+(defn graphelem->cypher [s m e]
   "Translate a graph element to cipher - either node or edge"
   (let [t (first e)]
     (cond
-     (= 'node t) (node->cypher m e)
-     (= 'edge t) (edge->cypher m e)
+     (= 'node t) (node->cypher s m e)
+     (= 'edge t) (edge->cypher s m e)
      :else
      (throw (Exception. "Invalid graph element"))
      )))
@@ -128,7 +103,7 @@
   (filter (fn [x] (= k (first x))) c))
 
 
-(defn pattern->cypher [m p]
+(defn pattern->cypher [scope m p]
   "translate a graph pattern to cypher matching query"
   (let [s (second p)
         els (:els s)
@@ -138,7 +113,7 @@
     (if (nil? els)
       ""
       (str
-       (reduce (partial str-sep " ") (map (partial graphelem->cypher m) els))
+       (reduce (partial str-sep " ") (map (partial graphelem->cypher scope m) els))
        (if (= m :match)
            (str
             (if (= :iso sem)
@@ -183,11 +158,11 @@
 ; Execution engine
 ;-----------------------
 
-(defn match [m]
+(defn match [s m]
   "match a pattern in the host graph"
   (if (nil? (:els (second m)))
     '()
-    (let [m (cy/tquery conn (str (pattern->cypher :match m) " LIMIT 1"))]
+    (let [m (cy/tquery conn (str (pattern->cypher s :match m) " LIMIT 1"))]
       (if (empty? m)
         m
         (let [r (first m)
@@ -202,31 +177,83 @@
           )))))
 
 
-(defn apply-rule [r]
+(defn apply-rule
   "apply a rule to a host graph"
-  (let [reader (:read r)
-        redex (if (not (nil? reader))
-                (let [m (match reader)]
-                  (if (empty? m)
-                    nil
-                    (redex->cypher m)))
-                "")]
-    (if (nil? redex)
-      nil
-      (let [s (str redex
-                   (if (contains? r :delete) (str (if (= (:theory r) 'dpo)
-                                                    " DELETE "
-                                                    " DETACH DELETE ")
-                                                  (reduce (partial str-sep ", ") (:delete r)))
-                         "")
-                   (if (contains? r :create) (pattern->cypher :create (:create r))
-                         "")
-                   )]
-        (do
-          (println s)
-          (try
-            (cy/tquery conn s)
-            (catch Exception e
-              (str "Exception: " (.getMessage e)))))
-          ))))
+  ([n s]
+   (let [r (gragra n)]
+     (if (nil? r)
+       (throw (Exception. (str "a rule with name " n " does not exist")))
+       (let [reader (:read r)
+             redex (if (not (nil? reader))
+                     (let [m (match s reader)]
+                       (if (empty? m)
+                         nil
+                         (redex->cypher m)))
+                     "")]
+         (if (nil? redex)
+           false
+           (let [s (str redex
+                        (if (contains? r :delete)
+                          (str (if (= (:theory r) 'dpo)
+                                 " DELETE "
+                                 " DETACH DELETE ")
+                               (reduce (partial str-sep ", ") (:delete r)))
+                          "")
+                        (if (contains? r :create)
+                          (pattern->cypher s :create (:create r))
+                          "")
+                        )]
+             (do
+               (println s)
+               (try
+                 (cy/tquery conn s)
+                 true
+                 #_(catch Exception e
+                   (do
+                     (println (str "Exception: " (.getMessage e)))
+                     false ))))))))))
+  ([n]
+   (apply-rule n {})))
 
+; -------------------
+; DSL forms ---------
+; -------------------
+
+
+(defn node
+  "DSL form for specifying a node"
+  ([id rest]
+   ['node (assoc rest :id id)])
+  ([id ]
+   (node id {})))
+
+(defn edge
+  "DSL form for specifying an edge"
+  [id rest]
+   ['edge (assoc rest :id id)])
+
+
+(defn pattern
+  "DSL form for specifying a graph pattern (reader)"
+  [& xs]
+  (if (= :homo (first xs))
+    ['pattern {:sem :homo :els (rest xs)}]
+    ['pattern {:sem :iso :els  xs}]
+    )
+  )
+
+
+(defn rule
+  "DSL form for specifying a graph transformation"
+  ([n params prop]
+   (do
+     (let [r (assoc prop :params params)
+           s (if (not (contains? prop :theory))
+               (assoc r :theory 'spo)
+               r)]
+       (def gragra (assoc gragra n s)))
+     (if (= [] params)
+       (intern *ns* (symbol n) (fn [] (apply-rule n)))
+       (intern *ns* (symbol n) (fn [par] (apply-rule n par))))))
+  ([n prop]
+   (rule n [] prop)))
