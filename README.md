@@ -123,7 +123,15 @@ But what happens to the 'employee' edge _e_ when the contract node _con_ is dele
               (edge 'e {:label "employee" :src 'con :tar 'emp}))
        :delete ['con]})
 ```
+### Example 7: Repeatedly applying a rule
+A rule can be applied repeatedly using the _while_ form. Given the following example rule that deletes any node, we can simply delete the entire graph using _while_:
+```clojure
+(rule 'delete-any-node
+      {:read (pattern (node 'n))
+       :delete ['n]})
 
+(while (delete-any-node))
+```
 
 Copyright © 2016 Jens Weber
 
