@@ -114,18 +114,19 @@ The above rule allows us to express our "self-employment" example.
 The following rule also deletes matched graph elements. In this case it replaces a "works_for" edge with a new "Contract" node and two edges.
 
 ```clojure
-(rule 'rewrite_contract! 
-      {:read (pattern
+rule 'rewrite_contract!
+      { :read (pattern
                (node 'n1)
                (node 'n2)
                (edge 'e {:label "works_for" :src 'n1 :tar 'n2}))
         :delete ['e]
         :create (pattern
-                 (node 'n3 {:label "Contract" :asserts {:name "contract"}})
+                 (node 'n3 {:label "Contract" :asserts {:name "Contract" :with 'n1.name}})
                  (edge 'e1 {:label "employer" :src 'n3 :tar 'n2})
                  (edge 'e2 {:label "employee" :src 'n3 :tar 'n1}))})
 ```
 ![createJens](https://raw.githubusercontent.com/jenshweber/grape/master/doc/images/rewrite_contract!.png)
+Another interesting aspect abot the above rule is that the _create_ part of the rule copies an attribute from a graph element matched in the _read_ part of the rule (n1.name).
 
 ### Example 6: Dealing with "dangling" edges
 Consider the following rule whose purpose it is to "fire" an employee with a given name (by deleting the contract node). 
