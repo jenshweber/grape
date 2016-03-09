@@ -4,9 +4,8 @@
             [clojure.math.combinatorics :as combo]
             [clojure.data.json :as json]
             [clojure.test :refer :all]
-            )
-  (:use [clojure.string :only (join split)])
-  )
+            [clojure.data.codec.base64 :as b64]
+            [dorothy.core :as dorothy]))
 
 (def dburi "http://localhost:7474/db/data/")
 (def dbusr "neo4j")
@@ -22,6 +21,102 @@
 
 (defn str-sep [s x y ] (str x s y))
 
+
+;--------------------
+; Visualization
+;--------------------
+
+(defn dot->render [g]
+  (dorothy/render g {:format :png}))
+
+(defn dot->image [g]
+  (String. (b64/encode (dorothy/render g {:format :png}))))
+
+(defn dorothy->dot [g]
+  (dorothy/dot g))
+
+(defn asserts->dot [as]
+  "Translate a map of assertions to Dot"
+  (if (empty? as)
+    ""
+    (str (reduce (partial str-sep "\n") (map (fn [[k v]]
+                                               (str (name k) "="
+                                                    (if (symbol? v)
+                                                      v
+                                                      (str "'" v "'"))
+                                                    "\n")) as)))))
+
+(defn node->dot [n c]
+  (let [p (second n)
+        name (:id p)
+        l (:label p)
+        as (:asserts p)]
+    (str " " name " [color=" c " shape=record penwidth=bold "
+         "label=\"{" name (if (nil? l) "" (str ":" l))
+         (if (empty? as)
+           " "
+           (str " | " (asserts->dot as)))
+         " }\"]; ")))
+
+;(node 'n {:asserts {:key "value"}})
+
+(defn edge->dot [e c]
+  (let [p (second e)
+        src (name (:src p))
+        tar (name (:tar p))
+        l (:label p)
+        as (:asserts p)]
+    (str " " src " -> " tar
+         " [color=" c " penwidth=bold len=2"
+         "label=\"" l
+         (if (empty? as)
+           ""
+           (str "\n{" (asserts->dot as) "}"))
+         "\" ]"
+         )))
+
+(defn graphelem->dot [d c1 c2 e]
+  "Translate a graph element to dorothy - either node or edge"
+  (let [t (first e)
+        id (:id (second e))
+        c (if (nil? (some #{id} d)) c1 c2)]
+    (cond
+     (= 'node t) (node->dot e c)
+     (= 'edge t) (edge->dot e c)
+     :else
+     (throw (Exception. "Invalid graph element"))
+     )))
+
+
+(defn pattern->dot
+  "translate a graph pattern to dot"
+  [p d c1 c2]
+  (let [els (:els (second p))]
+    (if (nil? els)
+      ""
+      (reduce str (map (partial graphelem->dot d c1 c2) els)))))
+
+
+(defn rule->dot [rid]
+  "translate a rule to dot"
+  (let [n (name rid)
+        rule (gragra rid)
+        r (:read rule)
+        d (:delete rule)
+        c (:create rule)
+        p (:params rule)]
+    (str "digraph g { layout=\"fdp\" k=10 splines=true overlap=false subgraph cluster0 {"
+         "label=\"Rule: " n (str p)\";"
+         (pattern->dot r d "black" "red")
+         (pattern->dot c [] "green" "green")
+         "}}")))
+
+
+(defn document-rule [r]
+  (dorothy/save! (rule->dot r) (str "doc/images/"(name r) ".png") {:format :png}))
+
+(defn document-rules []
+  (map document-rule (keys gragra)))
 
 ;---------------------------
 ; DSL to Cypher translation
@@ -115,15 +210,15 @@
       (str
        (reduce (partial str-sep " ") (map (partial graphelem->cypher scope m) els))
        (if (= m :match)
-           (str
-            (if (= :iso sem)
-              (gen-constraint-isomorphism nids eids)
-              ""
-              )
-            " RETURN "
-            (reduce (partial str-sep ", ") (concat nids eids)))
-           ""
-           )))))
+         (str
+          (if (= :iso sem)
+            (gen-constraint-isomorphism nids eids)
+            ""
+            )
+          " RETURN "
+          (reduce (partial str-sep ", ") (concat nids eids)))
+         ""
+         )))))
 
 (defn redex->cypher [r]
   "recall a redex by node and edge IDs"
@@ -209,9 +304,9 @@
                  (cy/tquery conn s)
                  true
                  #_(catch Exception e
-                   (do
-                     (println (str "Exception: " (.getMessage e)))
-                     false ))))))))))
+                     (do
+                       (println (str "Exception: " (.getMessage e)))
+                       false ))))))))))
   ([n]
    (apply-rule n {})))
 
@@ -230,7 +325,7 @@
 (defn edge
   "DSL form for specifying an edge"
   [id rest]
-   ['edge (assoc rest :id id)])
+  ['edge (assoc rest :id id)])
 
 
 (defn pattern
@@ -252,8 +347,12 @@
                (assoc r :theory 'spo)
                r)]
        (def gragra (assoc gragra n s)))
-     (if (= [] params)
-       (intern *ns* (symbol n) (fn [] (apply-rule n)))
-       (intern *ns* (symbol n) (fn [par] (apply-rule n par))))))
+     (let [s (symbol n)]
+       (if (= [] params)
+         (intern *ns* s (fn [] (apply-rule n)))
+         (intern *ns* s (fn [par] (apply-rule n par))))
+       (intern *ns* (symbol (str (name n) "-dot")) (fn [] (rule->dot n)))
+       ((intern *ns* (symbol (str (name n) "-show")) (fn [] (dot->image (rule->dot n))))))))
   ([n prop]
    (rule n [] prop)))
+
