@@ -114,7 +114,7 @@ The above rule allows us to express our "self-employment" example.
 The following rule also deletes matched graph elements. In this case it replaces a "works_for" edge with a new "Contract" node and two edges.
 
 ```clojure
-(rule 'rewrite_contracts! 
+(rule 'rewrite_contract! 
       {:read (pattern
                (node 'n1)
                (node 'n2)
@@ -125,7 +125,7 @@ The following rule also deletes matched graph elements. In this case it replaces
                  (edge 'e1 {:label "employer" :src 'n3 :tar 'n2})
                  (edge 'e2 {:label "employee" :src 'n3 :tar 'n1}))})
 ```
-![createJens](https://raw.githubusercontent.com/jenshweber/grape/master/doc/images/rewrite_contracts!.png)
+![createJens](https://raw.githubusercontent.com/jenshweber/grape/master/doc/images/rewrite_contract!.png)
 
 ### Example 6: Dealing with "dangling" edges
 Consider the following rule whose purpose it is to "fire" an employee with a given name (by deleting the contract node). 
@@ -159,6 +159,7 @@ A rule can be applied repeatedly using the _while_ form. Given the following exa
 (while (delete-any-node!))
 ```
 ![createJens](https://raw.githubusercontent.com/jenshweber/grape/master/doc/images/delete-any-node!.png)
+
 Copyright © 2016 Jens Weber
 
 Distributed under the Eclipse Public License either version 1.0 or (at
