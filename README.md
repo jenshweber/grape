@@ -16,16 +16,18 @@ Graph rewriting rules are defined using the 'rule' form. Rules consist of three 
 The following rule creates only one node. It has an empty _read_ and _delete_ part, so it matches any host graph and deletes nothing.
 
 ```clojure
-(rule 'create-jens 
+(rule 'create-jens! 
       {:create 
           (pattern 
             (node 'n {:label "Person" :asserts {:name "Jens"}}))}))
 ```
-The 'node' form is used to specify the node to be created. Note that Grape currently supports only one (optional) type label for nodes, but multiple (optional) property assigments (assert).
+The 'node' form is used to specify the node to be created. Grape currently supports only one (optional) type label for nodes, but multiple (optional) property assigments (assert).
+The graphical representation of the above rule is given in the image below:
+[[https://github.com/jenshweber/grape/doc/images/createJens!.png|alt=createJens!]]
 
 Defining a rule results in the creation of a new function with the name of the rule. The rule can be applied by calling that function:
 ```clojure
-(create-jens)
+(create-jens!)
 ```
 The call to the rule function returns _true_ if (and only if) the rule application succeeds. 
 
