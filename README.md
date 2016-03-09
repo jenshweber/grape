@@ -36,7 +36,9 @@ Visual representations can also be saved as image files to the file system by ca
 (document-rule 'create-jens!) ; saves a PNG visual representation of rule 'createJens!
 (document-rules) ; saves PNG visual representations for all defined rules
 ```
+Indeed, if Lighttable is used as the IDE, the visual rule representation can be "inlined" within the IDE. This function requires the NerdyPainter plugin.
 
+#### Applying a rule ####
 
 Defining a rule results in the creation of a new function with the name of the rule. The rule can be applied by calling that function:
 ```clojure
