@@ -44,7 +44,7 @@
                                                     (if (symbol? v)
                                                       v
                                                       (str "'" v "'"))
-                                                    "\n")) as)))))
+                                                    )) as)))))
 
 (defn node->dot [n c]
   (let [p (second n)
@@ -67,7 +67,7 @@
         l (:label p)
         as (:asserts p)]
     (str " " src " -> " tar
-         " [color=" c " penwidth=bold len=2"
+         " [color=" c " penwidth=bold len=2 "
          "label=\"" l
          (if (empty? as)
            ""
@@ -123,20 +123,26 @@
 ;---------------------------
 
 
-(defn resolve-const-or-par [scope x]
+(defn resolve-const-or-par-ass [scope x]
+  (if (symbol? x)
+    (if (contains? scope x)
+      (str "\"" (scope x) "\"")
+      x)
+    (str "\"" x "\"")))
+
+(defn resolve-const-or-par-lab [scope x]
   (if (symbol? x)
     (if (contains? scope x)
       (scope x)
       x)
-    x))
-
+    x ))
 
 
 (defn asserts->cypher [s as]
   "Translate a map of assertions to a Cypher code fragment"
   (if (empty? as)
     ""
-    (str " {" (reduce (partial str-sep ", ") (map (fn [[k v]] (str (name k) ":\"" (resolve-const-or-par s v) "\"")) as)) "}")
+    (str " {" (reduce (partial str-sep ", ") (map (fn [[k v]] (str (name k) ":" (resolve-const-or-par-ass s v) )) as)) "}")
     ))
 
 
@@ -148,7 +154,7 @@
          (let [l (:label c)]
            (if (nil? l)
              ""
-             (str ":" (resolve-const-or-par s l))))
+             (str ":" (resolve-const-or-par-lab s l))))
          (asserts->cypher s (:asserts c))
          ")"
          )))
@@ -160,7 +166,7 @@
          (let [l (:label c)]
            (if (nil? l)
              ""
-             (str ":" (resolve-const-or-par s l))))
+             (str ":" (resolve-const-or-par-lab s l))))
          (asserts->cypher s (:ass c))
          "]->(" (:tar c) ")")))
 

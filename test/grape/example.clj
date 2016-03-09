@@ -33,7 +33,7 @@
 
 
 (rule 'works_for! ['e 's]
-      { :read (pattern :homo
+      { :read (pattern
                 (node 'f {:label "Person" :asserts {:name 's}})
                 (node 'j {:label "Person" :asserts {:name 'e}}))
         :create (pattern
@@ -48,18 +48,18 @@
 
 
 (rule 'rewrite_contract!
-      { :read (pattern :homo
+      { :read (pattern
                (node 'n1)
                (node 'n2)
                (edge 'e {:label "works_for" :src 'n1 :tar 'n2}))
         :delete ['e]
         :create (pattern
-                 (node 'n3 {:label "Contract" :asserts {:name "contract"}})
+                 (node 'n3 {:label "Contract" :asserts {:name "Contract" :with 'n1.name}})
                  (edge 'e1 {:label "employer" :src 'n3 :tar 'n2})
                  (edge 'e2 {:label "employee" :src 'n3 :tar 'n1}))})
 
 
-(rewrite_contract)
+(rewrite_contract!)
 
 
 (rule 'fire-employee! ['name]
@@ -77,6 +77,6 @@
        :delete ['n]})
 
 
-(while (delete-any-node))
+(while (delete-any-node!))
 
 (delete-any-node)
