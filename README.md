@@ -23,7 +23,7 @@ The following rule creates only one node. It has an empty _read_ and _delete_ pa
 ```
 The 'node' form is used to specify the node to be created. Grape currently supports only one (optional) type label for nodes, but multiple (optional) property assigments (assert).
 The graphical representation of the above rule is given in the image below:
-![createJens](https://github.com/jenshweber/grape/doc/images/createJens!.png)
+![createJens](https://raw.githubusercontent.com/jenshweber/grape/master/doc/images/create-jens!.png)
 
 Defining a rule results in the creation of a new function with the name of the rule. The rule can be applied by calling that function:
 ```clojure
