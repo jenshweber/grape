@@ -22,9 +22,21 @@ The following rule creates only one node. It has an empty _read_ and _delete_ pa
             (node 'n {:label "Person" :asserts {:name "Jens"}}))}))
 ```
 The 'node' form is used to specify the node to be created. Grape currently supports only one (optional) type label for nodes, but multiple (optional) property assigments (assert).
-The graphical representation of the above rule is given in the image below:
+The visual representation of the above rule is given in the image below. Here we use the popular "inline" notation of rewrite rules, where green coloured shapes mark those graph elements that are being created, i.e., graph elements that appear on the right hand side of the rule, but not on the left-hand side.
 
 ![createJens](https://raw.githubusercontent.com/jenshweber/grape/master/doc/images/create-jens!.png)
+
+Grape supports automatic generation of rule visualizations based on the popular Graphviz tool. Each rule definition automatically creates a function to emit the rule in Graphviz (dot) format. The name of that function is <rulename>-dot. For example, the following function call will return the visual prepresentation of the above example rule:
+
+```clojure
+(create-jens!-dot)
+```
+Visual representations can also be saved as image files to the file system by calling _document-rule_ for a given rule, or _document-rules_ for all defined rules:
+```clojure
+(document-rule 'create-jens!) ; saves a PNG visual representation of rule 'createJens!
+(document-rules) ; saves PNG visual representations for all defined rules
+```
+
 
 Defining a rule results in the creation of a new function with the name of the rule. The rule can be applied by calling that function:
 ```clojure
