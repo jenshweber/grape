@@ -48,7 +48,8 @@
 
 
 (rule 'rewrite_contract!
-      { :read (pattern :homo
+      {
+         :read (pattern :homo
                        (node 'n1)
                        (node 'n2)
                        (edge 'e {:label "works_for" :src 'n1 :tar 'n2}))
@@ -71,17 +72,25 @@
 
 (fire-employee! {'name "Flo"})
 
-(rule 'works_for! ['e 's]
+(rule 'works_for2! ['e 's]
       { :read (pattern
+               (node 'f {:label "Person" :asserts {:name 's}})
+               (node 'j {:label "Person" :asserts {:name 'e}})
+               (NAC 1
+                (edge 'e1 {:label "works_for" :src 'j :tar 'f} )))
+        :create (pattern
+                 (edge 'e2 {:label "works_for" :src 'j :tar 'f} ))
+        })
+
+(def t2 (pattern
                (node 'f {:label "Person" :asserts {:name 's}})
                (node 'j {:label "Person" :asserts {:name 'e}})
                (NAC 1
                 (edge 'e1 {:label "works_for" :src 'j :tar 'f} ))
                (NAC 2
-                (edge 'e1 {:label "works_for" :src 'j :tar 'f} )))
-        :create (pattern
-                 (edge 'e2 {:label "works_for" :src 'j :tar 'f} ))
-        })
+                (edge 'e1 {:label "works_for" :src 'j :tar 'f} ))))
+;(filter (fn [x] (= 'NAC (first x))) (:els (second t2)))
+
 
 (rule 'delete-any-node!
       {:read (pattern (node 'n))
@@ -90,3 +99,4 @@
 
 (while (delete-any-node!))
 
+(document-rules)

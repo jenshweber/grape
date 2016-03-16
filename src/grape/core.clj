@@ -185,6 +185,7 @@
     (cond
      (= 'node t) (node->cypher s m e)
      (= 'edge t) (edge->cypher s m e)
+     (= 'NAC t) ""
      :else
      (throw (Exception. "Invalid graph element"))
      )))
@@ -230,8 +231,7 @@
             (gen-constraint-isomorphism nids eids)
             ""
             )
-          " RETURN "
-          (reduce (partial str-sep ", ") (concat nids eids)))
+          " ")
          ""
          )))))
 
@@ -268,11 +268,11 @@
 ; Execution engine
 ;-----------------------
 
-(defn match [s m]
-  "match a pattern in the host graph"
+(defn match [s c m]
+  "match a pattern in the host graph. s is a parameterlist, c is an (optional) match context string and m is a pattern"
   (if (nil? (:els (second m)))
     '()
-    (let [m (cy/tquery conn (str (pattern->cypher s :match m) " LIMIT 1"))]
+    (let [m (cy/tquery conn (str c " "(pattern->cypher s :match m) " RETURN * LIMIT 1"))]
       (if (empty? m)
         m
         (let [r (first m)
@@ -286,6 +286,22 @@
           {:nodes (remove-unneeded nodes) :edges (remove-unneeded edges)}
           )))))
 
+(defn match-nacs [con s nacs]
+  (if (empty? nacs)
+    false
+    (let [nac (first nacs)
+          [_ nacid p] nac
+          ext (pattern->cypher s :match p)]
+      (println ".       [Trying NAC " nacid "]: " con "  ||  " ext )
+      (let [m (cy/tquery conn (str con " " ext " RETURN * LIMIT 1"))]
+        (if (empty? m)
+          (do
+            (println ".       [false]")
+            (match-nacs con s (rest nacs)))
+          (do
+            (println ".       [true]")
+            true))))))
+
 
 (defn apply-rule
   "apply a rule to a host graph"
@@ -293,36 +309,42 @@
    (let [r (gragra n)]
      (if (nil? r)
        (throw (Exception. (str "a rule with name " n " does not exist")))
-       (let [reader (:read r)
-             redex (if (not (nil? reader))
-                     (let [m (match s reader)]
+       (do
+         (println "[Applying rule:]" (name n))
+         (let [reader (:read r)
+               redex (if (not (nil? reader))
+                     (let [m (match s "" reader)]
                        (if (empty? m)
                          nil
-                         (redex->cypher m)))
-                     "")]
-         (if (nil? redex)
-           false
-           (let [s (str redex
-                        (if (contains? r :delete)
-                          (str (if (= (:theory r) 'dpo)
-                                 " DELETE "
-                                 " DETACH DELETE ")
-                               (reduce (partial str-sep ", ") (:delete r)))
-                          "")
-                        (if (contains? r :create)
-                          (pattern->cypher s :create (:create r))
-                          "")
-                        )]
-             (do
-               (println s)
-               (try
-                 (cy/tquery conn s)
-                 true
-                 #_(catch Exception e
-                     (do
-                       (println (str "Exception: " (.getMessage e)))
-                       false ))))))))))
-  ([n]
+                         (let [nacs (filter (fn [x] (= 'NAC (first x))) (:els (second reader)))
+                               con (redex->cypher m)]
+                           (if (match-nacs con s nacs)
+                             nil
+                             con))))
+                       "")]
+           (if (nil? redex)
+             false
+             (let [s (str redex
+                          (if (contains? r :delete)
+                            (str (if (= (:theory r) 'dpo)
+                                   " DELETE "
+                                   " DETACH DELETE ")
+                                 (reduce (partial str-sep ", ") (:delete r)))
+                            "")
+                          (if (contains? r :create)
+                            (pattern->cypher s :create (:create r))
+                            "")
+                          )]
+               (do
+                 (println ".   [changes:] "s)
+                 (try
+                   (cy/tquery conn s)
+                   true
+                   #_(catch Exception e
+                       (do
+                         (println (str "Exception: " (.getMessage e)))
+                         false )))))))))))
+   ([n]
    (apply-rule n {})))
 
 ; -------------------
