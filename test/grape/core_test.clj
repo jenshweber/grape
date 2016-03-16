@@ -32,6 +32,11 @@
   )
 
 
+(pattern :homo
+               (node 'n1 {:label "Table"})
+               (node 'n3 {:label "Attribute"})
+               (edge 'e2 {:label "col" :src 'n1 :tar 'n3}))
+
 ;-------------------------- 
 ; testing translation to Cypher
 ;--------------------------

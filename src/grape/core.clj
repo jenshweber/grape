@@ -357,9 +357,9 @@
   ['edge (assoc rest :id id)])
 
 
-(defn pattern
+(s/defn ^:always-validate pattern
   "DSL form for specifying a graph patterns"
-  [& xs]
+  [& xs :- ((s/either :homo [(s/either 'node 'edge){s/Keyword s/Any }]))]
   (if (= :homo (first xs))
     ['pattern {:sem :homo :els (rest xs)}]
     ['pattern {:sem :iso :els  xs}]
