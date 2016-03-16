@@ -33,13 +33,13 @@
 
 
 (rule 'works_for! ['e 's]
-      { :read (pattern :homo
+      { :read (pattern
                        (node 'f {:label "Person" :asserts {:name 's}})
                        (node 'j {:label "Person" :asserts {:name 'e}}))
         :create (pattern
                  (edge 'e {:label "works_for" :src 'j :tar 'f} ))})
 
-(works_for! {'e "Flo" 's "Jens"})
+(works_for2! {'e "Flo" 's "Jens"})
 
 
 (works_for! {'e "Jens" 's "Jens"})

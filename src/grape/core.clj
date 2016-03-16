@@ -272,7 +272,9 @@
   "match a pattern in the host graph. s is a parameterlist, c is an (optional) match context string and m is a pattern"
   (if (nil? (:els (second m)))
     '()
-    (let [m (cy/tquery conn (str c " "(pattern->cypher s :match m) " RETURN * LIMIT 1"))]
+    (let [q (str c " "(pattern->cypher s :match m) " RETURN * LIMIT 1")
+          _ (print q)
+          m (cy/tquery conn q)]
       (if (empty? m)
         m
         (let [r (first m)
@@ -291,29 +293,27 @@
     false
     (let [nac (first nacs)
           [_ nacid p] nac
-          ext (pattern->cypher s :match p)]
-      (println ".       [Trying NAC " nacid "]: " con "  ||  " ext )
-      (let [m (cy/tquery conn (str con " " ext " RETURN * LIMIT 1"))]
+          ext (pattern->cypher s :match p)
+          _ (print ".       [Trying NAC " nacid "]: " con "  ||  " ext )]
+      (let [m (cy/tquery conn (str con " " ext " RETURN * LIMIT 1"))
+            _ (println " [" (not (empty? m)) "]")]
         (if (empty? m)
-          (do
-            (println ".       [false]")
-            (match-nacs con s (rest nacs)))
-          (do
-            (println ".       [true]")
-            true))))))
+          (match-nacs con s (rest nacs))
+          true)))))
 
 
 (defn apply-rule
   "apply a rule to a host graph"
   ([n s]
-   (let [r (gragra n)]
+   (let [r (gragra n)
+         _ (println "[Applying rule:]" (name n))]
      (if (nil? r)
        (throw (Exception. (str "a rule with name " n " does not exist")))
-       (do
-         (println "[Applying rule:]" (name n))
-         (let [reader (:read r)
-               redex (if (not (nil? reader))
-                     (let [m (match s "" reader)]
+       (let [reader (:read r)
+             redex (if (not (nil? reader))
+                     (let [_ (print ".     [matching RHS] ")
+                           m (match s "" reader)
+                           _ (println " [match found: " (not (empty? m)) "]")]
                        (if (empty? m)
                          nil
                          (let [nacs (filter (fn [x] (= 'NAC (first x))) (:els (second reader)))
@@ -321,30 +321,28 @@
                            (if (match-nacs con s nacs)
                              nil
                              con))))
-                       "")]
-           (if (nil? redex)
-             false
-             (let [s (str redex
-                          (if (contains? r :delete)
-                            (str (if (= (:theory r) 'dpo)
-                                   " DELETE "
-                                   " DETACH DELETE ")
-                                 (reduce (partial str-sep ", ") (:delete r)))
-                            "")
-                          (if (contains? r :create)
-                            (pattern->cypher s :create (:create r))
-                            "")
-                          )]
-               (do
-                 (println ".   [changes:] "s)
-                 (try
-                   (cy/tquery conn s)
-                   true
-                   #_(catch Exception e
-                       (do
-                         (println (str "Exception: " (.getMessage e)))
-                         false )))))))))))
-   ([n]
+                     "")]
+         (if (nil? redex)
+           false
+           (let [s (str redex
+                        (if (contains? r :delete)
+                          (str (if (= (:theory r) 'dpo)
+                                 " DELETE "
+                                 " DETACH DELETE ")
+                               (reduce (partial str-sep ", ") (:delete r)))
+                          "")
+                        (if (contains? r :create)
+                          (pattern->cypher s :create (:create r))
+                          ""))
+                 _ (println ".     [rewriting graph:] " s)]
+               (try
+                 (cy/tquery conn s)
+                 true
+                 #_(catch Exception e
+                     (do
+                       (println (str "Exception: " (.getMessage e)))
+                       false )))))))))
+  ([n]
    (apply-rule n {})))
 
 ; -------------------
