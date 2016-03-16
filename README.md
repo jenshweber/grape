@@ -150,7 +150,24 @@ But what happens to the 'employee' edge _e_ when the contract node _con_ is dele
               (edge 'e {:label "employee" :src 'con :tar 'emp}))
        :delete ['con]})
 ```
-### Example 7: Repeatedly applying a rule
+### Example 7: Rules with Negative Application Conditions (NACs)
+Negative applications conditions (NACs) are conditions that, if met, inhibit a rule from being applied. Consider the 'works_for!' rule from Example 4. You may want to specify that a 'works_for' edge is created between two persons _only_ if there isn't already such an edge in the graph. A NAC can be used to accomplish this, as seen in the following rule:
+```clojure
+(rule 'works_for2! ['e 's]
+      { :read (pattern
+               (node 'f {:label "Person" :asserts {:name 's}})
+               (node 'j {:label "Person" :asserts {:name 'e}})
+               (NAC 1
+                (edge 'e1 {:label "works_for" :src 'j :tar 'f} )))
+        :create (pattern
+                 (edge 'e2 {:label "works_for" :src 'j :tar 'f} ))
+        })
+````
+NACs are specified using 'NAC' forms, which essentially specifiy graph patterns that, if matched in the context of the _read_ part, will inhibit the application of the rule. Grape allows multiple NACs per rule. The visual representation of NAC's uses dashed borders, with different NACs rendered in different colours. 
+
+![works_for1!](https://raw.githubusercontent.com/jenshweber/grape/master/doc/images/works_for2!.png)
+
+### Example 8: Repeatedly applying a rule
 A rule can be applied repeatedly using the _while_ form. Given the following example rule that deletes any node, we can simply delete the entire graph using _while_:
 ```clojure
 (rule 'delete-any-node!
