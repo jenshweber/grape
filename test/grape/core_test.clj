@@ -11,8 +11,8 @@
 
 (deftest test-node
   (testing "Node form failed (1)"
-    (is (= (node 'n1 {:label 'label1 :asserts {:key1 "val1" :key2 "val2"}})
-           ['node {:id 'n1 :label 'label1 :asserts {:key1 "val1" :key2 "val2"}}]
+    (is (= (node 'n1 {:label "label1" :asserts {:key1 "val1" :key2 "val2"}})
+           ['node {:id 'n1 :label "label1" :asserts {:key1 "val1" :key2 "val2"}}]
            )))
   (testing "Node form failed (2)"
     (is (= (node 'n1)
@@ -30,7 +30,6 @@
            ['edge {:id 'e1 :src 's :tar 't}]
            )))
   )
-
 
 
 ;-------------------------- 

@@ -5,6 +5,7 @@
             [clojure.data.json :as json]
             [clojure.test :refer :all]
             [clojure.data.codec.base64 :as b64]
+            [schema.core :as s]
             [dorothy.core :as dorothy]))
 
 (def dburi "http://localhost:7474/db/data/")
@@ -337,16 +338,22 @@
 ; -------------------
 
 
-(defn node
+(s/defn ^:always-validate node
   "DSL form for specifying a node"
-  ([id rest]
+  ([id :- s/Symbol
+    rest :- {(s/optional-key :label) (s/either s/Symbol s/Str)
+             (s/optional-key :asserts) {s/Keyword (s/either s/Symbol s/Str)}}]
    ['node (assoc rest :id id)])
-  ([id ]
+  ([id :- s/Symbol]
    (node id {})))
 
-(defn edge
+(s/defn ^:always-validate edge
   "DSL form for specifying an edge"
-  [id rest]
+  [id :- s/Symbol
+   rest :- {(s/optional-key :label) (s/either s/Symbol s/Str)
+            :src s/Symbol
+            :tar s/Symbol
+            (s/optional-key :asserts) {s/Keyword (s/either s/Symbol s/Str)}}]
   ['edge (assoc rest :id id)])
 
 
