@@ -250,19 +250,6 @@
 
 
 
-(defn rule->cypher [r]
-  "translate a rule to cypher"
-  (str
-   (if (contains? r :delete) (str (if (= (:theory r) 'dpo)
-                                    " DELETE "
-                                    " DETACH DELETE ")
-                                  (reduce (partial str-sep ", ") (:delete r)))
-     "")
-   (if (contains? r :create) (pattern->cypher :create (:create r))
-     "")
-   ))
-
-
 
 ;-----------------------
 ; Execution engine

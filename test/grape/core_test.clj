@@ -40,38 +40,40 @@
 
 (deftest test-asss->cypher
   (testing "Translation of assertion to Cypher failed (1)"
-    (is (= (asserts->cypher {:key1 "val1" :key2 "val2"})
-           " {key1:\"val1\" key2:\"val2\"}"
+    (is (= (asserts->cypher {} {:key1 "val1" :key2 "val2"})
+           " {key1:\"val1\", key2:\"val2\"}"
            )))
   (testing "Translation of assertion to Cypher failed (2)"
-    (is (= (asserts->cypher {})
+    (is (= (asserts->cypher {} {})
            ""
            )))
+  (testing "Translation of assertion to Cypher failed (2)"
+    (is (= (asserts->cypher {'p "val3"} {:key1 "val1" :key2 'p})
+           " {key1:\"val1\", key2:\"val3\"}"
+           )))
+
   )
 
 
-
-
-   (deftest test-node->cypher
+(deftest test-node->cypher
     (testing "Translation of nodes to Cypher failed"
-      (is (= (node->cypher :match (node 'n1 {:label 'label1 :asserts {:key1 "val1" :key2 "val2"}}))
-              " MATCH (n1:label1 {key1:\"val1\", key2:\"val2\"})"
-              ))
-      (is (= (node->cypher :create (node 'n1 {:label 'label1 :asserts {:key1 "val1" :key2 "val2"}})))
-              " CREATE (n1:label1 {key1:\"val1\", key2:\"val2\"})"
-              ))
-      )
+      (is (= (node->cypher {} :match (node 'n1 {:label "label1" :asserts {:key1 "val1" :key2 "val2"}}))
+              " MATCH (n1:label1 {key1:\"val1\", key2:\"val2\"})"))
+      (is (= (node->cypher {} :create (node 'n1 {:label "label1" :asserts {:key1 "val1" :key2 "val2"}}))
+              " CREATE (n1:label1 {key1:\"val1\", key2:\"val2\"})"))
+      (is (= (node->cypher {'p "val3"} :match (node 'n1 {:label 'p :asserts {:key1 "val1" :key2 "val2"}}))
+              " MATCH (n1:val3 {key1:\"val1\", key2:\"val2\"})"))))
 
 
 
 
  (deftest test-edge->cypher
     (testing "Translation of edges to Cypher failed"
-      (is (= (edge->cypher :match (edge 'e1 {:label 'label1 :src 's :tar 't :asserts {:key1 "val1" :key2 "val2"}}) ))
+      (is (= (edge->cypher {} :match (edge 'e1 {:label "label1" :src 's :tar 't :asserts {:key1 "val1" :key2 "val2"}}) ))
               " MATCH (s)-[e1:label1 {key1:\"val1\", key2:\"val2\"}]->(t)"
               ))
-      (is (= (edge->cypher :create (edge 'e1 {:label 'label1 :src 's :tar 't :asserts {:key1 "val1" :key2 "val2"}}) ))
-              " CREATE (s)-[e1:label {key1:\"val1\", key2:\"val2\"}]->(t)"
+      (is (= (edge->cypher {'p "val3"} :create (edge 'e1 {:label "label1" :src 's :tar 't :asserts {:key1 "val1" :key2 "val2"}}) ))
+              " CREATE (s)-[e1:val3 {key1:\"val1\", key2:\"val2\"}]->(t)"
               ))
 
 
@@ -79,33 +81,22 @@
 
   (deftest test-pattern->cypher
     (testing "Translation of graph to Cypher failed (1)"
-      (is (= (pattern->cypher :match
+      (is (= (pattern->cypher {} :match
               (pattern :homo
-               (node 'n1 {:label 'Table})
-               (node 'n3 {:label 'Attribute})
-               (edge 'e2 {:label 'col :src 'n1 :tar 'n3})))
-              " MATCH (n1:Table)  MATCH (n3:Attribute)  MATCH (n1)-[e2:col]->(n3) RETURN n1, n3, e2"
+               (node 'n1 {:label "Table"})
+               (node 'n3 {:label "Attribute"})
+               (edge 'e2 {:label "col" :src 'n1 :tar 'n3})))
+              " MATCH (n1:Table)  MATCH (n3:Attribute)  MATCH (n1)-[e2:col]->(n3) "
               )))
     (testing "Translation of graph to Cypher failed (2)"
-      (is (= (pattern->cypher :match
+      (is (= (pattern->cypher {} :match
               (pattern
-               (node 'n1 {:label 'Table} )
-               (node 'n3 {:label 'Attribute} )
-               (edge 'e2 {:label 'col :src 'n1 :tar 'n3})
-               (edge 'e3 {:label 'mock :src 'n1 :tar 'n3})))
-              " MATCH (n1:Table)  MATCH (n3:Attribute)  MATCH (n1)-[e2:col]->(n3)  MATCH (n1)-[e3:mock]->(n3) WHERE ID(n1)<>ID(n3) AND ID(e2)<>ID(e3) RETURN n1, n3, e2, e3"
+               (node 'n1 {:label "Table"} )
+               (node 'n3 {:label "Attribute"} )
+               (edge 'e2 {:label "col" :src 'n1 :tar 'n3})
+               (edge 'e3 {:label "mock" :src 'n1 :tar 'n3})))
+              " MATCH (n1:Table)  MATCH (n3:Attribute)  MATCH (n1)-[e2:col]->(n3)  MATCH (n1)-[e3:mock]->(n3) WHERE ID(n1)<>ID(n3) AND ID(e2)<>ID(e3) "
               ))))
-
-
-
-  (deftest test-rule->cypher
-    (testing "Translation of rule to Cypher failed (1)"
-      (is (= (rule->cypher (rule 'rulename {
-                                  :create (pattern
-                                           (node 'n {:label 'label}))}))
-              " CREATE (n:label)"
-              )))
-  )
 
 
 
@@ -119,17 +110,17 @@
    (testing "Execution engine neo4j - match"
      (is (contains?
           (:nodes (match (pattern
-                         (node 'n1 {:label '_testlabel1}))))
+                         (node 'n1 {:label "_testlabel1"}))))
           "n1"))
      (is (empty? (match (pattern
-                         (node 'n1 {:label '_testlabel100})))))
+                         (node 'n1 {:label "_testlabel100"})))))
      (is (empty? (match (pattern
-                         (node 'n1 {:label '_testlabel1})
-                         (node 'n2 {:label '_testlabel1})
+                         (node 'n1 {:label "_testlabel1"})
+                         (node 'n2 {:label "_testlabel1"})
                          ))))
      (is (not (empty? (match (pattern :homo
-                         (node 'n1 {:label '_testlabel1})
-                         (node 'n2 {:labels '_testlabel1})
+                         (node 'n1 {:label "_testlabel1"})
+                         (node 'n2 {:labels "_testlabel1"})
                          )))))
      )
    ;tear down
@@ -141,14 +132,12 @@
 
 (deftest test-apply-rule
    ;setup
-   (cy/tquery conn "match (n) detach delete n")
-   (testing "Execution engine - apply-rule failed"
-     (is (not (nil?
-          (apply-rule (rule 'rulename {
-                    :create (pattern
-                             (node 'n {:label 'testlabel
-                                       :asserts {:key "value" :key2 "value2"}}))})))))
+  (cy/tquery conn "match (n) detach delete n")
+  (rule 'rulename {:create (pattern
+                            (node 'n {:label "testlabel"
+                                      :asserts {:key "value" :key2 "value2"}}))})
+  (testing "Execution engine - apply-rule failed"
+    (is (true? (apply-rule 'rulename))))
    ;tear down
-   (cy/tquery conn "match (n) detach delete n")
-     ))
+   (cy/tquery conn "match (n) detach delete n"))
 
