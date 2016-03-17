@@ -5,8 +5,9 @@
             [clojure.data.json :as json]
             [clojure.test :refer :all]
             [clojure.data.codec.base64 :as b64]
+            [dorothy.core :as dorothy]
             [schema.core :as s]
-            [dorothy.core :as dorothy]))
+            ))
 
 (def dburi "http://localhost:7474/db/data/")
 (def dbusr "neo4j")
@@ -44,8 +45,7 @@
                                                (str (name k) "="
                                                     (if (symbol? v)
                                                       v
-                                                      (str "'" v "'"))
-                                                    )) as)))))
+                                                      (str "'" v "'")))) as)))))
 
 (defn node->dot [n c o]
   (let [p (second n)
@@ -337,14 +337,13 @@
 ; DSL forms ---------
 ; -------------------
 
-
 (s/defn ^:always-validate node
   "DSL form for specifying a node"
   ([id :- s/Symbol
     rest :- {(s/optional-key :label) (s/either s/Symbol s/Str)
              (s/optional-key :asserts) {s/Keyword (s/either s/Symbol s/Str)}}]
    ['node (assoc rest :id id)])
-  ([id :- s/Symbol]
+  ([id]
    (node id {})))
 
 (s/defn ^:always-validate edge
@@ -356,10 +355,9 @@
             (s/optional-key :asserts) {s/Keyword (s/either s/Symbol s/Str)}}]
   ['edge (assoc rest :id id)])
 
-
-(s/defn ^:always-validate pattern
+(defn pattern
   "DSL form for specifying a graph patterns"
-  [& xs :- ((s/either :homo [(s/either 'node 'edge){s/Keyword s/Any }]))]
+  [& xs]
   (if (= :homo (first xs))
     ['pattern {:sem :homo :els (rest xs)}]
     ['pattern {:sem :iso :els  xs}]

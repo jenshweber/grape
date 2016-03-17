@@ -32,10 +32,6 @@
   )
 
 
-(pattern :homo
-               (node 'n1 {:label "Table"})
-               (node 'n3 {:label "Attribute"})
-               (edge 'e2 {:label "col" :src 'n1 :tar 'n3}))
 
 ;-------------------------- 
 ; testing translation to Cypher
@@ -81,6 +77,10 @@
               ))
 
 
+ (pattern :homo
+               (node 'n1 {:label "Table"})
+               (node 'n3 {:label "Attribute"})
+               (edge 'e2 {:label "col" :src 'n1 :tar 'n3}))
 
 
   (deftest test-pattern->cypher
@@ -102,7 +102,7 @@
               " MATCH (n1:Table)  MATCH (n3:Attribute)  MATCH (n1)-[e2:col]->(n3)  MATCH (n1)-[e3:mock]->(n3) WHERE ID(n1)<>ID(n3) AND ID(e2)<>ID(e3) "
               ))))
 
-
+;(run-tests)
 
  ;------------------------------
  ; testing neo4j execution engine
@@ -113,18 +113,18 @@
    (cy/tquery conn "create (n1:_testlabel1)-[e1:_edgelabel]->(n3:_testlabel2)")
    (testing "Execution engine neo4j - match"
      (is (contains?
-          (:nodes (match (pattern
-                         (node 'n1 {:label "_testlabel1"}))))
+          (:nodes (match {} "" (pattern
+                          (node 'n1 {:label "_testlabel1"}))))
           "n1"))
-     (is (empty? (match (pattern
+     (is (empty? (match {} "" (pattern
                          (node 'n1 {:label "_testlabel100"})))))
-     (is (empty? (match (pattern
+     (is (empty? (match {} ""(pattern
                          (node 'n1 {:label "_testlabel1"})
                          (node 'n2 {:label "_testlabel1"})
                          ))))
-     (is (not (empty? (match (pattern :homo
+     (is (not (empty? (match  {} "" (pattern :homo
                          (node 'n1 {:label "_testlabel1"})
-                         (node 'n2 {:labels "_testlabel1"})
+                         (node 'n2 {:label "_testlabel1"})
                          )))))
      )
    ;tear down
