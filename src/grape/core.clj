@@ -7,7 +7,7 @@
             [clojure.data.codec.base64 :as b64]
             [dorothy.core :as dorothy]
             [schema.core :as s]
-            ))
+            [clojure.set :refer :all]))
 
 (def dburi "http://localhost:7474/db/data/")
 (def dbusr "neo4j")
@@ -337,44 +337,103 @@
 ; DSL forms ---------
 ; -------------------
 
-(s/defn ^:always-validate node
+(defn check-syntax-generic [s c m]
+  (if (not c)
+    (throw (Exception. (str "Grape syntax error: " m
+                            "\n Expected syntax: \n" s
+
+                            "\n ... where <> denotes an optional element, | denotes an alternative choice, and N+ denotes a list of elements \n\n")))))
+(defn valid-schema [s d]
+  (nil? (s/check s d)))
+
+(defn valid-children [allowed d]
+  (let [c (reduce (fn [l x] (cons (first x) l)) '() d) ]
+    (subset? (set c) allowed)))
+
+
+(defn node
   "DSL form for specifying a node"
-  ([id :- s/Symbol
-    rest :- {(s/optional-key :label) (s/either s/Symbol s/Str)
-             (s/optional-key :asserts) {s/Keyword (s/either s/Symbol s/Str)}}]
+  ([id rest]
+   (let [check-syntax (partial check-syntax-generic
+                               (str "NODE   :- ( node ID <PROP> ) \n"
+                                    "PROP   :- { <LABEL> <ASSERT> } \n"
+                                    "LABEL  :- :label L \n"
+                                    "ASSERT :- :asserts {KEYVAL*} \n"
+                                    "KEYVAL :- KEY VALUE \n"
+                                    "ID     :- *symbol* \n"
+                                    "KEY    :- *keyword* \n"
+                                    "L,VALUE:- *symbol* | *string*\n"))]
+     (check-syntax (symbol? id) "ID should be a symbol.")
+     (check-syntax (valid-schema {(s/optional-key :label) (s/either s/Symbol s/Str)
+                                  (s/optional-key :asserts) {s/Keyword (s/either s/Symbol s/Str)}}
+                                 rest) ""))
    ['node (assoc rest :id id)])
   ([id]
    (node id {})))
 
-(s/defn ^:always-validate edge
+(defn edge
   "DSL form for specifying an edge"
-  [id :- s/Symbol
-   rest :- {(s/optional-key :label) (s/either s/Symbol s/Str)
-            :src s/Symbol
-            :tar s/Symbol
-            (s/optional-key :asserts) {s/Keyword (s/either s/Symbol s/Str)}}]
+  [id rest]
+  (let [check-syntax (partial check-syntax-generic
+                              (str "EDGE   :- ( edge ID <PROP> ) \n"
+                                   "PROP   :- { <LABEL> <ASSERT> :src ID :tar ID } \n"
+                                   "LABEL  :- :label L \n"
+                                   "ASSERT :- :asserts {KEYVAL*} \n"
+                                   "KEYVAL :- KEY VALUE \n"
+                                   "ID     :- *symbol* \n"
+                                   "KEY    :- *keyword* \n"
+                                   "L,VALUE:- *symbol* | *string*\n"))]
+     (check-syntax (symbol? id) "edge ID should be a symbol.")
+     (check-syntax (valid-schema {(s/optional-key :label) (s/either s/Symbol s/Str)
+                                  :src s/Symbol
+                                  :tar s/Symbol
+                                  (s/optional-key :asserts) {s/Keyword (s/either s/Symbol s/Str)}}
+                                 rest) ""))
   ['edge (assoc rest :id id)])
 
 (defn pattern
   "DSL form for specifying a graph patterns"
   [& xs]
-  (if (= :homo (first xs))
-    ['pattern {:sem :homo :els (rest xs)}]
-    ['pattern {:sem :iso :els  xs}]
-    )
-  )
+  (let [check-syntax (partial check-syntax-generic
+                              (str "PATTERN :- ( pattern <MTYPE> ELEM+ ) \n"
+                                   "MTYPE   :- :iso | :homo \n"
+                                   "ELEM    :- (node ...) | (edge ...) | (NAC ...)"))]
+    (let [f (first xs)
+          r (if (keyword? f) (rest xs) xs)
+          m (if (= f :homo) :homo :iso)]
+      (if (symbol? f) (check-syntax (valid-schema (s/either :homo :iso) f) "MTYPE must be :iso or :homo") )
+      (check-syntax (valid-children #{'node 'edge 'NAC} r) "ELEM must be node, edge or NAC")
+      ['pattern {:sem m :els r}])))
+
 
 (defn NAC
   "DSL form for specifying Negatic Applications Conditions (NACs)"
   [& xs]
-  (if (number? (first xs))
-    ['NAC (first xs) (apply pattern (rest xs))]
-    ['NAC 1 (apply pattern xs)]))
+    (let [check-syntax (partial check-syntax-generic
+                              (str "NAC :- ( NAC <ID> (pattern ...) ) \n"
+                                   "ID  :- *number*"))]
+      (let [f (first xs)
+            id (if (number? f) f 1)
+            r (if (number? f) (rest xs) xs)]
+        (check-syntax (valid-children #{'node 'edge 'NAC} r) "ELEM must be node, edge or NAC")
+        ['NAC id (apply pattern r)])))
+
 
 (defn rule
   "DSL form for specifying a graph transformation"
   ([n params prop]
-   (do
+   (let [check-syntax (partial check-syntax-generic
+                              (str "RULE          :- ( rule NAME <[PAR+]> { <:theory 'spo|'dpo> <:read PATTERN> <:delete [ID+]> <:create PATTERN> } ) \n"
+                                   "NAME, PAR, ID :- *symbol* \n"
+                                   "PATTERN       := (pattern ...)"))]
+     (check-syntax (symbol? n) "rule name must be a symbol")
+     (check-syntax (valid-schema [s/Symbol] params) "rule parameter list must be sequence of symbols")
+     (check-syntax (subset? (set (keys prop)) #{:read :delete :create :theory}) "unknown part of rule. Rules can only have :theory :read, :delete and :create parts")
+     (cond (contains? prop :read) (check-syntax (= 'pattern (first (:read prop))) "'read' part of rule must contain a pattern")
+           (contains? prop :create) (check-syntax (= 'pattern (first (:create prop))) "'create' part of rule must contain a pattern")
+           (contains? prop :delete) (check-syntax (valid-schema [s/Symbol] (:delete params)) "'delete' part must specify sequence of symbols")
+           (contains? prop :theory) (check-syntax (valid-schema (s/either 'spo 'dpo) (:theory prop))))
+
      (let [r (assoc prop :params params)
            s (if (not (contains? prop :theory))
                (assoc r :theory 'spo)
@@ -388,4 +447,6 @@
        ((intern *ns* (symbol (str (name n) "-show")) (fn [] (dot->image (rule->dot n))))))))
   ([n prop]
    (rule n [] prop)))
+
+
 

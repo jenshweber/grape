@@ -76,7 +76,7 @@
       { :read (pattern
                (node 'f {:label "Person" :asserts {:name 's}})
                (node 'j {:label "Person" :asserts {:name 'e}})
-               (NAC 1
+               (NAC
                 (edge 'e1 {:label "works_for" :src 'j :tar 'f} )))
         :create (pattern
                  (edge 'e2 {:label "works_for" :src 'j :tar 'f} ))
