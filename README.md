@@ -178,8 +178,6 @@ A rule can be applied repeatedly using the _while_ form. Given the following exa
 ```
 ![createJens](https://raw.githubusercontent.com/jenshweber/grape/master/doc/images/delete-any-node!.png)
 
-## Syntax errors
-Grape uses validates the syntax of rule definitions and throws exceptions for rules that are incorrectly defined. It currently uses Prismatic Schema (https://github.com/plumatic/schema) for that purpose. Refer to the Schema documentation for a better understanding on how to read the syntax errors produced.
 
 Copyright © 2016 Jens Weber
 
