@@ -178,6 +178,35 @@ A rule can be applied repeatedly using the _while_ form. Given the following exa
 ```
 ![createJens](https://raw.githubusercontent.com/jenshweber/grape/master/doc/images/delete-any-node!.png)
 
+## Syntax checks and static analysis
+Grape implements checks for syntactical ans static semantical correctness and will through exceptions if errors are found during rule definition. For example the following rule is considered incorrect with respect to Grape's syntax definition, as the rule name is a string and not a symbol:
+```clojure
+ (rule "testrule"
+       {:create
+        (pattern
+         (node 'n {:label "Person" :asserts {:name "Jens"}}))})
+```
+An exception with the following message will be thrown in this case:
+```
+Grape syntax error: rule name must be a symbol
+ Expected syntax: 
+RULE          :- ( rule NAME <[PAR+]> { <:theory 'spo|'dpo> <:read PATTERN> <:delete [ID+]> <:create PATTERN> } ) 
+NAME, PAR, ID :- *symbol* 
+PATTERN       := (pattern ...)
+ ... where <> denotes an optional element, | denotes an alternative choice, and N+ denotes a list of elements
+```
+Likewise, here is an example for a syntactically correct rule that has problems with respect to static semantics. (In this case an undeclared identifier is referenced.)
+```clojure
+(rule 'testrule
+       {:create
+        (pattern
+         (node 'n {:label "Person" :asserts {:name 'id}}))})
+```
+The exception thrown may look as follows:
+```
+Grape static analysis error: identifier id is used but not declared
+```
+Note, though, that Grape is schema-less, i.e., there is no need / ability to define a graph schema type for rules. Thus, Grape has no means of checking whether rule definitions are compliant to a particular graph class.
 
 Copyright © 2016 Jens Weber
 
