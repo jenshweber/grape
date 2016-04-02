@@ -1,354 +1,20 @@
 (ns grape.core
-  (:require [clojurewerkz.neocons.rest :as nr]
-            [clojurewerkz.neocons.rest.cypher :as cy]
-            [clojure.math.combinatorics :as combo]
-            [clojure.data.json :as json]
-            [clojure.test :refer :all]
-            [clojure.data.codec.base64 :as b64]
-            [dorothy.core :as dorothy]
-            [schema.core :as s]
-            [clojure.set :refer :all]))
-
-(def dburi "http://localhost:7474/db/data/")
-(def dbusr "neo4j")
-(def dbpw "neo4j")
-
-(def conn (nr/connect dburi dbusr dbpw))
-(def gragra {})
-
-; -------------------
-; Utility functions
-; ------------------
-
-
-(defn str-sep [s x y ] (str x s y))
-
-
-;--------------------
-; Visualization
-;--------------------
-
-(defn dot->render [g]
-  (dorothy/render g {:format :png}))
-
-(defn dot->image [g]
-  (String. (b64/encode (dorothy/render g {:format :png}))))
-
-(defn dorothy->dot [g]
-  (dorothy/dot g))
-
-(defn asserts->dot [as]
-  "Translate a map of assertions to Dot"
-  (if (empty? as)
-    ""
-    (str (reduce (partial str-sep "\n") (map (fn [[k v]]
-                                               (str (name k) "="
-                                                    (if (symbol? v)
-                                                      v
-                                                      (str "'" v "'")))) as)))))
-
-(defn node->dot [n c o]
-  (let [p (second n)
-        name (:id p)
-        l (:label p)
-        as (:asserts p)]
-    (str " " name " [color=" c " shape=record penwidth=bold  " o " "
-         "label=\"{" name (if (nil? l) "" (str ":" l))
-         (if (empty? as)
-           " "
-           (str " | " (asserts->dot as)))
-         " }\"]; ")))
-
-
-(defn edge->dot [e c o]
-  (let [p (second e)
-        src (name (:src p))
-        tar (name (:tar p))
-        l (:label p)
-        as (:asserts p)]
-    (str " " src " -> " tar
-         " [color=" c " penwidth=bold len=2 constraint=false fontcolor=" c " " o
-         " label=\"" l
-         (if (empty? as)
-           ""
-           (str "\n{" (asserts->dot as) "}"))
-         "\" ]"
-         )))
-
-(declare pattern->dot)
-
-(defn NAC->dot
-  "translate a NAC to dot"
-  [nac]
-  (let [nacid (second nac)
-        c (nth '("blue" "darkviolet" "brown" "dimgrey") nacid)
-        p (nth nac 2)]
-    (pattern->dot p [] c c " style=dashed ")))
-
-(defn graphelem->dot [d c1 c2 o e]
-  "Translate a graph element to dorothy - either node or edge"
-  (let [t (first e)
-        id (:id (second e))
-        c (if (nil? (some #{id} d)) c1 c2)]
-    (cond
-     (= 'node t) (node->dot e c o)
-     (= 'edge t) (edge->dot e c o)
-     (= 'NAC t) (NAC->dot e)
-     :else
-     (throw (Exception. "Invalid graph element"))
-     )))
-
-
-(defn pattern->dot
-  "translate a graph pattern to dot"
-  [p d c1 c2 o]
-  (let [els (:els (second p))]
-    (if (nil? els)
-      ""
-      (reduce str (map (partial graphelem->dot d c1 c2 o) els)))))
-
-(defn rule->dot [rid]
-  "translate a rule to dot"
-  (let [n (name rid)
-        rule (gragra rid)
-        r (:read rule)
-        d (:delete rule)
-        c (:create rule)
-        p (:params rule)]
-    (str "digraph g {  splines=true overlap=false subgraph cluster0 {"
-         "label=\"Rule: " n (str p)\";"
-         (pattern->dot r d "black" "red" "")
-         (pattern->dot c [] "green" "green" "")
-         "}}")))
-
-
-(defn document-rule [r]
-  (dorothy/save! (rule->dot r) (str "doc/images/"(name r) ".png") {:format :png}))
-
-(defn document-rules []
-  (map document-rule (keys gragra)))
-
-;---------------------------
-; DSL to Cypher translation
-;---------------------------
-
-
-(defn resolve-const-or-par-ass [scope x]
-  (if (symbol? x)
-    (if (contains? scope x)
-      (str "\"" (scope x) "\"")
-      x)
-    (str "\"" x "\"")))
-
-(defn resolve-const-or-par-lab [scope x]
-  (if (symbol? x)
-    (if (contains? scope x)
-      (scope x)
-      x)
-    x ))
-
-
-(defn asserts->cypher [s as]
-  "Translate a map of assertions to a Cypher code fragment"
-  (if (empty? as)
-    ""
-    (str " {" (reduce (partial str-sep ", ") (map (fn [[k v]] (str (name k) ":" (resolve-const-or-par-ass s v) )) as)) "}")
-    ))
+  (:require
+   [clojure.math.combinatorics :as combo]
+   [schema.core :as s]
+   [clojure.string :as str]
+   [clojure.set :refer :all]
+   [grape.visualizer :refer :all]
+   [grape.tx-cypher :refer :all]
+   [grape.util :refer :all]
+   [grape.exec :refer :all]
+   [grape.analysis :refer :all]
+   ))
 
 
 
-(defn node->cypher [s m n]
-  (let [c (second n)
-        k (if (= m :match) " MATCH" " CREATE")]
-    (str k " (" (:id c)
-         (let [l (:label c)]
-           (if (nil? l)
-             ""
-             (str ":" (resolve-const-or-par-lab s l))))
-         (asserts->cypher s (:asserts c))
-         ")"
-         )))
-
-(defn edge->cypher [s m e]
-  (let [c (second e)
-        k (if (= m :match) " MATCH" " CREATE")]
-    (str k " (" (:src c) ")-[" (:id c)
-         (let [l (:label c)]
-           (if (nil? l)
-             ""
-             (str ":" (resolve-const-or-par-lab s l))))
-         (asserts->cypher s (:ass c))
-         "]->(" (:tar c) ")")))
-
-(defn graphelem->cypher [s m e]
-  "Translate a graph element to cipher - either node or edge"
-  (let [t (first e)]
-    (cond
-     (= 'node t) (node->cypher s m e)
-     (= 'edge t) (edge->cypher s m e)
-     (= 'NAC t) ""
-     :else
-     (throw (Exception. "Invalid graph element"))
-     )))
-
-(defn get-id [e]
-  (:id (second e)))
-
-
-(defn gen-constraint-isomorphism
-  [nids eids]
-  (if (and (<= (count eids) 1) (<= (count nids) 1))
-    ""
-    (let [nc (combo/combinations nids 2)
-          ec (combo/combinations eids 2)
-          f (fn [x] (str "ID("(first x) ")<>ID(" (second x) ")"))
-          ni (map f nc)
-          ei (map f ec)
-          ]
-      (str " WHERE "
-           (reduce (partial str-sep " AND ") (concat ni ei))
-           )))
-  )
-
-(defn filter-elem [k c]
-  "filter out specified graph element type k (node or edge)"
-  (filter (fn [x] (= k (first x))) c))
-
-
-(defn pattern->cypher [scope m p]
-  "translate a graph pattern to cypher matching query"
-  (let [s (second p)
-        els (:els s)
-        sem (:sem s)
-        eids (map get-id (filter-elem 'edge els))
-        nids (map get-id (filter-elem 'node els ))]
-    (if (nil? els)
-      ""
-      (str
-       (reduce (partial str-sep " ") (map (partial graphelem->cypher scope m) els))
-       (if (= m :match)
-         (str
-          (if (= :iso sem)
-            (gen-constraint-isomorphism nids eids)
-            ""
-            )
-          " ")
-         ""
-         )))))
-
-(defn redex->cypher [r]
-  "recall a redex by node and edge IDs"
-  (let [nnames (keys (:nodes r))
-        enames (keys (:edges r))
-        idmap (map (fn [[k v]] [k (:id (:metadata v))]) (concat (:nodes r) (:edges r)))]
-    (str
-     (reduce str (map (fn [x] (str " MATCH (" x ")")) nnames))
-     (reduce str (map (fn [x] (str " MATCH ()-[" x "]->()")) enames))
-     " WHERE "
-     (reduce (partial str-sep " AND") (map (fn [[k v]] (str " id(" k ")=" v)) idmap))
-     )
-    ))
-
-
-
-
-;-----------------------
-; Execution engine
-;-----------------------
-
-(defn match [s c m]
-  "match a pattern in the host graph. s is a parameterlist, c is an (optional) match context string and m is a pattern"
-  (if (nil? (:els (second m)))
-    '()
-    (let [q (str c " "(pattern->cypher s :match m) " RETURN * LIMIT 1")
-          _ (print q)
-          m (cy/tquery conn q)]
-      (if (empty? m)
-        m
-        (let [r (first m)
-              isNode? (fn [x] (re-find #"node" (:self x)))
-              nodes (filter (fn [[k v]] (isNode? v)) r)
-              edges (filter (fn [[k v]] (not (isNode? v))) r)
-              remove-unneeded (fn [x]
-                                (zipmap (keys x)
-                                        (map (fn [y] (select-keys y [:metadata :data]))
-                                             (vals x))))]
-          {:nodes (remove-unneeded nodes) :edges (remove-unneeded edges)}
-          )))))
-
-(defn match-nacs [con s nacs]
-  (if (empty? nacs)
-    false
-    (let [nac (first nacs)
-          [_ nacid p] nac
-          ext (pattern->cypher s :match p)
-          _ (print ".       [Trying NAC " nacid "]: " con "  ||  " ext )]
-      (let [m (cy/tquery conn (str con " " ext " RETURN * LIMIT 1"))
-            _ (println " [" (not (empty? m)) "]")]
-        (if (empty? m)
-          (match-nacs con s (rest nacs))
-          true)))))
-
-
-(defn apply-rule
-  "apply a rule to a host graph"
-  ([n s]
-   (let [r (gragra n)
-         _ (println "[Applying rule:]" (name n))]
-     (if (nil? r)
-       (throw (Exception. (str "a rule with name " n " does not exist")))
-       (let [reader (:read r)
-             redex (if (not (nil? reader))
-                     (let [_ (print ".     [matching RHS] ")
-                           m (match s "" reader)
-                           _ (println " [match found: " (not (empty? m)) "]")]
-                       (if (empty? m)
-                         nil
-                         (let [nacs (filter (fn [x] (= 'NAC (first x))) (:els (second reader)))
-                               con (redex->cypher m)]
-                           (if (match-nacs con s nacs)
-                             nil
-                             con))))
-                     "")]
-         (if (nil? redex)
-           false
-           (let [s (str redex
-                        (if (contains? r :delete)
-                          (str (if (= (:theory r) 'dpo)
-                                 " DELETE "
-                                 " DETACH DELETE ")
-                               (reduce (partial str-sep ", ") (:delete r)))
-                          "")
-                        (if (contains? r :create)
-                          (pattern->cypher s :create (:create r))
-                          ""))
-                 _ (println ".     [rewriting graph:] " s)]
-               (try
-                 (cy/tquery conn s)
-                 true
-                 #_(catch Exception e
-                     (do
-                       (println (str "Exception: " (.getMessage e)))
-                       false )))))))))
-  ([n]
-   (apply-rule n {})))
-
-; -------------------
-; DSL forms ---------
-; -------------------
-
-(defn check-syntax-generic [s c m]
-  (if (not c)
-    (throw (Exception. (str "Grape syntax error: " m
-                            "\n Expected syntax: \n" s
-
-                            "\n ... where <> denotes an optional element, | denotes an alternative choice, and N+ denotes a list of elements \n\n")))))
-(defn valid-schema [s d]
-  (nil? (s/check s d)))
-
-(defn valid-children [allowed d]
-  (let [c (reduce (fn [l x] (cons (first x) l)) '() d) ]
-    (subset? (set c) allowed)))
+(defn gg []
+  (intern *ns* 'gragra {}))
 
 
 (defn node
@@ -383,12 +49,12 @@
                                    "ID     :- *symbol* \n"
                                    "KEY    :- *keyword* \n"
                                    "L,VALUE:- *symbol* | *string*\n"))]
-     (check-syntax (symbol? id) "edge ID should be a symbol.")
-     (check-syntax (valid-schema {(s/optional-key :label) (s/either s/Symbol s/Str)
-                                  :src s/Symbol
-                                  :tar s/Symbol
-                                  (s/optional-key :asserts) {s/Keyword (s/either s/Symbol s/Str)}}
-                                 rest) ""))
+    (check-syntax (symbol? id) "edge ID should be a symbol.")
+    (check-syntax (valid-schema {(s/optional-key :label) (s/either s/Symbol s/Str)
+                                 :src s/Symbol
+                                 :tar s/Symbol
+                                 (s/optional-key :asserts) {s/Keyword (s/either s/Symbol s/Str)}}
+                                rest) ""))
   ['edge (assoc rest :id id)])
 
 (defn pattern
@@ -409,36 +75,38 @@
 (defn NAC
   "DSL form for specifying Negatic Applications Conditions (NACs)"
   [& xs]
-    (let [check-syntax (partial check-syntax-generic
+  (let [check-syntax (partial check-syntax-generic
                               (str "NAC :- ( NAC <ID> (pattern ...) ) \n"
                                    "ID  :- *number*"))]
-      (let [f (first xs)
-            id (if (number? f) f 1)
-            r (if (number? f) (rest xs) xs)]
-        (check-syntax (valid-children #{'node 'edge 'NAC} r) "ELEM must be node, edge or NAC")
-        ['NAC id (apply pattern r)])))
+    (let [f (first xs)
+          id (if (number? f) f 1)
+          r (if (number? f) (rest xs) xs)]
+      (check-syntax (valid-children #{'node 'edge 'NAC} r) "ELEM must be node, edge or NAC")
+      ['NAC id (apply pattern r)])))
 
 
 (defn rule
   "DSL form for specifying a graph transformation"
   ([n params prop]
    (let [check-syntax (partial check-syntax-generic
-                              (str "RULE          :- ( rule NAME <[PAR+]> { <:theory 'spo|'dpo> <:read PATTERN> <:delete [ID+]> <:create PATTERN> } ) \n"
-                                   "NAME, PAR, ID :- *symbol* \n"
-                                   "PATTERN       := (pattern ...)"))]
+                               (str "RULE          :- ( rule NAME <[PAR+]> { <:theory 'spo|'dpo> <:read PATTERN> <:delete [ID+]> <:create PATTERN> } ) \n"
+                                    "NAME, PAR, ID :- *symbol* \n"
+                                    "PATTERN       := (pattern ...)"))]
      (check-syntax (symbol? n) "rule name must be a symbol")
      (check-syntax (valid-schema [s/Symbol] params) "rule parameter list must be sequence of symbols")
      (check-syntax (subset? (set (keys prop)) #{:read :delete :create :theory}) "unknown part of rule. Rules can only have :theory :read, :delete and :create parts")
-     (cond (contains? prop :read) (check-syntax (= 'pattern (first (:read prop))) "'read' part of rule must contain a pattern")
-           (contains? prop :create) (check-syntax (= 'pattern (first (:create prop))) "'create' part of rule must contain a pattern")
-           (contains? prop :delete) (check-syntax (valid-schema [s/Symbol] (:delete params)) "'delete' part must specify sequence of symbols")
-           (contains? prop :theory) (check-syntax (valid-schema (s/either 'spo 'dpo) (:theory prop))))
+     (if (contains? prop :read) (check-syntax (= 'pattern (first (:read prop))) "'read' part of rule must contain a pattern"))
+     (if (contains? prop :create) (check-syntax (= 'pattern (first (:create prop))) "'create' part of rule must contain a pattern"))
+     (if (contains? prop :delete) (check-syntax (valid-schema [s/Symbol] (:delete prop)) "'delete' part must specify sequence of symbols"))
+     (if (contains? prop :delete) (check-syntax (contains? prop :read) "'delete' part requires 'read' part to be present"))
+     (if (contains? prop :theory) (check-syntax (valid-schema (s/either 'spo 'dpo) (:theory prop))))
 
      (let [r (assoc prop :params params)
            s (if (not (contains? prop :theory))
                (assoc r :theory 'spo)
                r)]
-       (def gragra (assoc gragra n s)))
+       (validate-rule s)
+       (intern *ns* 'gragra (assoc (eval 'gragra) n s)))
      (let [s (symbol n)]
        (if (= [] params)
          (intern *ns* s (fn [] (apply-rule n)))
@@ -447,6 +115,4 @@
        ((intern *ns* (symbol (str (name n) "-show")) (fn [] (dot->image (rule->dot n))))))))
   ([n prop]
    (rule n [] prop)))
-
-
 

@@ -1,5 +1,7 @@
 (use 'grape.core)
 
+(gg)
+
 (rule 'create-jens!
       {:create
        (pattern
@@ -52,7 +54,8 @@
          :read (pattern :homo
                        (node 'n1)
                        (node 'n2)
-                       (edge 'e {:label "works_for" :src 'n1 :tar 'n2}))
+                       (edge 'e {:label "works_for" :src 'n1 :tar 'n2})
+                      (edge 'en {:label "dummy" :src 'n99 :tar 'n2}))
         :delete ['e]
         :create (pattern
                  (node 'n3 {:label "Contract" :asserts {:name "Contract" :with 'n1.name}})
@@ -77,7 +80,8 @@
                (node 'f {:label "Person" :asserts {:name 's}})
                (node 'j {:label "Person" :asserts {:name 'e}})
                (NAC
-                (edge 'e1 {:label "works_for" :src 'j :tar 'f} )))
+                (edge 'e1 {:label "works_for" :src 'j :tar 'f})
+                ))
         :create (pattern
                  (edge 'e2 {:label "works_for" :src 'j :tar 'f} ))
         })

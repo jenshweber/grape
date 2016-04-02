@@ -9,5 +9,9 @@
                  [dorothy "0.0.6"]
                  [org.clojure/data.codec "0.1.0"]
                  [prismatic/schema "1.0.5"]
-                 [clojurewerkz/neocons "3.1.0"]]
+                 [clojurewerkz/neocons "3.1.0"]
+                 [environ "1.0.2"]]
+  :plugins [[lein-environ "1.0.2"]]
+  :profiles {:dev {}}
 )
+
