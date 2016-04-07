@@ -8,6 +8,8 @@
             [grape.util :refer :all]
             ))
 
+(defn graphlabel []
+  (str ":_" (name (:_graph_name (eval 'gragra)))))
 
 (defn resolve-const-or-par-ass [scope x]
   (if (symbol? x)
@@ -39,8 +41,8 @@
     (str k " (" (:id c)
          (let [l (:label c)]
            (if (nil? l)
-             ""
-             (str ":" (resolve-const-or-par-lab s l))))
+             (graphlabel)
+             (str  ":" (resolve-const-or-par-lab s l) (graphlabel))))
          (asserts->cypher s (:asserts c))
          ")"
          )))
@@ -51,7 +53,7 @@
     (str k " (" (:src c) ")-[" (:id c)
          (let [l (:label c)]
            (if (nil? l)
-             ""
+             (graphlabel)
              (str ":" (resolve-const-or-par-lab s l))))
          (asserts->cypher s (:ass c))
          "]->(" (:tar c) ")")))

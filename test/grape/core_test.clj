@@ -28,7 +28,7 @@
 
 
 (deftest test-static-analysis
-  (gg)
+  (gts)
   (is (thrown? Exception
                (rule 'rule
                      {:create

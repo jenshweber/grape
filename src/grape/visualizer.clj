@@ -92,7 +92,7 @@
 (defn rule->dot [rid]
   "translate a rule to dot"
   (let [n (name rid)
-        rule ((eval 'gragra) rid)
+        rule ((:rules (eval 'gragra)) rid)
         r (:read rule)
         d (:delete rule)
         c (:create rule)
@@ -108,5 +108,5 @@
   (dorothy/save! (rule->dot r) (str "doc/images/"(name r) ".png") {:format :png}))
 
 (defn document-rules []
-  (map document-rule (keys (intern *ns* 'gragra))))
+  (map document-rule (keys (:rules (intern *ns* 'gragra)))))
 

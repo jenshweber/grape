@@ -88,7 +88,7 @@
                     (str "deleted element " i " must be declared in 'read' part of the rule"))
     (check-stat-sem (implies (in? e :read-appl) (or (in? e :read-decl) (in? e :par )))
                     (str "identifier " i " referenced in 'read' part should be declared in that part or defined as formal parameter"))
-    (check-stat-sem (implies (in? e :create-appl) (or (in? e :read-decl) (in? e :par )))
+    (check-stat-sem (implies (in? e :create-appl) (or (in? e :read-decl) (in? e :create-decl) (in? e :par )))
                     (str "identifier " i " referenced in 'create' part should be declared in that part or defined as formal parameter"))
 
     ))

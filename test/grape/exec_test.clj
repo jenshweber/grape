@@ -34,7 +34,7 @@
 (deftest test-apply-rule
    ;setup
   (cy/tquery conn "match (n) detach delete n")
-  (gg)
+  (gts)
   (rule 'rulename {:create (pattern
                             (node 'n {:label "testlabel"
                                       :asserts {:key "value" :key2 "value2"}}))})

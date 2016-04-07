@@ -12,9 +12,13 @@
    ))
 
 
-
-(defn gg []
-  (intern *ns* 'gragra {}))
+(defn gts [n]
+  (let [check-syntax (partial check-syntax-generic
+                              (str "GTS    :- (gts ID ) \n"
+                                   "ID     :- *symbol* \n"
+                                   ))]
+    (check-syntax (symbol? n) "gts ID should be a symbol."))
+  (intern *ns* 'gragra {:_graph_name n :rules {}}))
 
 
 (defn node
@@ -106,7 +110,7 @@
                (assoc r :theory 'spo)
                r)]
        (validate-rule s)
-       (intern *ns* 'gragra (assoc (eval 'gragra) n s)))
+       (intern *ns* 'gragra (assoc (eval 'gragra) :rules (assoc (:rules (eval 'gragra)) n s) )))
      (let [s (symbol n)]
        (if (= [] params)
          (intern *ns* s (fn [] (apply-rule n)))
@@ -115,4 +119,3 @@
        ((intern *ns* (symbol (str (name n) "-show")) (fn [] (dot->image (rule->dot n))))))))
   ([n prop]
    (rule n [] prop)))
-

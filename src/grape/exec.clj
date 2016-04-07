@@ -53,7 +53,7 @@
 (defn apply-rule
   "apply a rule to a host graph"
   ([n s]
-   (let [r ((eval 'gragra) n)
+   (let [r ((:rules (eval 'gragra)) n)
          _ (println "[Applying rule:]" (name n))]
      (if (nil? r)
        (throw (Exception. (str "a rule with name " n " does not exist")))
