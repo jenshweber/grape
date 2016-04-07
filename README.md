@@ -7,6 +7,10 @@ Import the Grape library.
 ```clojure
 (use 'grape.core)
 ```
+Create a new graph transformation system and give it a name.
+```clojure
+(gts 'example)
+```
 Graph rewriting rules are defined using the ```rule``` form. Rules consist of three parts:
 - the ```:read``` specifies the graph pattern to be matched in the host graph
 - the ```:delete``` part specifies which graph elements from the matched host graph should be deleted
@@ -25,18 +29,6 @@ The ```node``` form is used to specify the node to be created. Grape currently s
 The visual representation of the above rule is given in the image below. Here we use the popular "inline" notation of rewrite rules, where green coloured shapes mark those graph elements that are being created, i.e., graph elements that appear on the right hand side of the rule, but not on the left-hand side.
 
 ![createJens](https://raw.githubusercontent.com/jenshweber/grape/master/doc/images/create-jens!.png)
-
-Grape supports automatic generation of rule visualizations based on the popular Graphviz tool. Each rule definition automatically creates a function to emit the rule in Graphviz (dot) format. The name of that function is <rulename>-dot. For example, the following function call will return the visual prepresentation of the above example rule:
-
-```clojure
-(create-jens!-dot)
-```
-Visual representations can also be saved as image files to the file system by calling function ```document-rule``` for a defined rule, or ```document-rules``` for all defined rules:
-```clojure
-(document-rule 'create-jens!) ; saves a PNG visual representation of rule 'createJens!
-(document-rules) ; saves PNG visual representations for all defined rules
-```
-Indeed, if Lighttable is used as the IDE, the visual rule representation can be "inlined" within the IDE. This function requires the NerdyPainter plugin.
 
 #### Applying a rule ####
 
@@ -207,6 +199,22 @@ The exception thrown may look as follows:
 Grape static analysis error: identifier id is used but not declared
 ```
 Note, though, that Grape is schema-less, i.e., there is no need / ability to define a graph schema type for rules. Thus, Grape has no means of checking whether rule definitions are compliant to a particular graph class.
+
+## Rule Visualization and Documentation ##
+
+Grape supports automatic generation of rule visualizations based on the Graphviz tool. Each rule definition automatically creates a function to emit the rule in Graphviz (dot) format. The name of that function is <rulename>-dot. For example, the following function call will return the visual prepresentation of the above example rule:
+
+```clojure
+(use 'grape.visualizer)
+(create-jens!-dot)
+```
+Visual representations can also be saved as image files to the file system by calling function ```document-rule``` for a defined rule, or ```document-rules``` for all defined rules:
+```clojure
+(document-rule 'create-jens!) ; saves a PNG visual representation of rule 'createJens!
+(document-rules) ; saves PNG visual representations for all defined rules
+```
+Indeed, if Lighttable is used as the IDE, the visual rule representation can be "inlined" within the IDE. This function requires the NerdyPainter plugin.
+
 
 Copyright © 2016 Jens Weber
 
