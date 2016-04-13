@@ -28,28 +28,28 @@
 
 
 (deftest test-static-analysis
-  (gts)
+  (gts 'example)
   (is (thrown? Exception
-               (rule 'rule
+               (rule 'rule1
                      {:create
                       (pattern
                        (node 'n {:label 'k :asserts {:name "Jens"}}))})))
-  (is (not (nil? (rule 'rule ['k]
+  (is (not (nil? (rule 'rule1 ['k]
                        {:create
                         (pattern
                          (node 'n {:label 'k :asserts {:name "Jens"}}))}))))
   (is (thrown? Exception
-               (rule 'rule ['k]
+               (rule 'rule1 ['k]
                      {:create
                       (pattern
                        (node 'k {:label "label" :asserts {:name "Jens"}}))})))
    (is (thrown? Exception
-               (rule 'rule ['k]
+               (rule 'rule1 ['k]
                      {:read
                       (pattern
                        (node 'k {:label "label" :asserts {:name "Jens"}}))})))
    (is (thrown? Exception
-               (rule 'rule
+               (rule 'rule1
                      {:read
                       (pattern
                        (node 'k {:label "label" :asserts {:name "Jens"}}))
@@ -61,7 +61,7 @@
                        {:read (pattern (node 'k))
                         :delete ['n]})))
   (is (thrown? Exception
-               (rule 'rule
+               (rule 'rule1
                      {:read
                       (pattern
                        (node 'k {:label "label" :asserts {:name 'n.name}}))
@@ -69,12 +69,12 @@
                       (pattern
                        (node 'n {:label "label" :asserts {:name "Jens"}}))})))
   (is (thrown? Exception
-               (rule 'rule
+               (rule 'rule1
                      {:read
                       (pattern
                        (node 'k {:label "label" :asserts {:name 'n.name}}))})))
   (is (thrown? Exception
-               (rule 'rule
+               (rule 'rule1
                      {:create
                       (pattern
                        (node 'n {:label "label" :asserts {:name 'k.name}}))})))

@@ -7,8 +7,8 @@
        (pattern
         (node 'n {:label "Person" :asserts {:name "Jens"}}))})
 
-
 (create-jens!)
+
 
 (rule 'create-person! ['p]
       {:create
@@ -35,14 +35,14 @@
 
 
 (rule 'works_for! ['e 's]
-      { :read (pattern
+      { :read (pattern :homo
                        (node 'f {:label "Person" :asserts {:name 's}})
                        (node 'j {:label "Person" :asserts {:name 'e}}))
         :create (pattern
                  (edge 'd {:label "works_for" :src 'j :tar 'f} ))})
 
 
-(works_for! {'e "Jens" 's "Jens"})
+(works_for! {'e "Flo" 's "Jens"})
 
 
 
@@ -82,7 +82,7 @@
         :create (pattern
                  (edge 'e2 {:label "works_for" :src 'j :tar 'f} ))
         })
-
+(works_for2! {'e "Flo" 's "Jens"})
 
 
 (rule 'delete-any-node!
