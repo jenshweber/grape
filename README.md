@@ -50,7 +50,7 @@ Our first example rule was not very versatile, since it could not generate diffe
 
 Formal parameters must be actualized when the rule is applied. The rule application below creates a Person node with name "Flo".
 ```clojure
-(create-person! {'p "Flo"})
+(create-person! "Flo")
 ```
 
 ### Example 3: A rule with a _reader_
@@ -65,7 +65,7 @@ The the next rule has a _read_ as well as a _create_ part. It matches two Person
                  (edge 'e {:label "parent_of" :src 'j :tar 'f} )
                  )})
 
-(parent_of! {'p "Jens" 'c "Flo"})
+(parent_of! "Jens" "Flo")
 ```
 ![createJens](https://raw.githubusercontent.com/jenshweber/grape/master/doc/images/parent_of!.png)
 
@@ -84,11 +84,11 @@ The following rule is similar to Example 3.
 
 It works fine when the _read_ part maps the two nodes in the pattern to two nodes in the host graph, for example:
 ```clojure
-(works_for! {'e "Flo" 's "Jens"})
+(works_for! "Flo" "Jens")
 ```
 However, we cannot use it to express sitations where a person is self-employed, e.g.,
 ```clojure
-(works_for! {'e "Jens" 's "Jens"})
+(works_for! "Jens" "Jens")
 ```
 (Note: We are assuming here that there is only one person with name "Jens", i.e., that the person's name is a unique identifier. In that case the above rule application will not find a valid match (and return ```nil```). This is because Grape's rule matching engine will search for _isomorphic_ matches of the _read_ pattern in the host graph. This means that the nodes / edges in the read pattern must match to _distinct_ nodes / edges in the host graph. This matching semantics can be changed to _homomorphic_ matches by adding the :homo keyword to the definition of the reader pattern:
 ```clojure
