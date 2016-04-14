@@ -49,6 +49,12 @@
           (match-nacs con s (rest nacs))
           true)))))
 
+(defn rule-exists? [n]
+  (not (empty? (:rules (eval 'gragra) n))))
+
+
+
+
 
 (defn apply-rule
   "apply a rule to a host graph"

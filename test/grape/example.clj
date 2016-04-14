@@ -17,7 +17,7 @@
 
 
 
-(create-person! {'p "Flo"})
+(create-person! "Flo")
 
 
 
@@ -30,7 +30,7 @@
                  )})
 
 
-(parent_of! {'p "Jens" 'c "Flo"})
+(parent_of! "Jens" "Flo")
 
 
 
@@ -42,7 +42,7 @@
                  (edge 'd {:label "works_for" :src 'j :tar 'f} ))})
 
 
-(works_for! {'e "Jens" 's "Jens"})
+(works_for! "Flo" "Jens")
 
 
 
@@ -70,7 +70,7 @@
               (edge 'e {:label "employee" :src 'con :tar 'emp}))
        :delete ['con]})
 
-(fire-employee! {'name "Flo"})
+(fire-employee! "Flo")
 
 (rule 'works_for2! ['e 's]
       { :read (pattern
