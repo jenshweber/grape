@@ -199,7 +199,45 @@ However, Grape provides special control structures that support transactions. Th
 
 ### Example 10: Transactions
 
+Grape supports atomic transactions. Consider the following rule _let_one_go!_ as an example:
 
+```clojure
+(rule 'let_one_go! ['employer]
+      {
+       :read (pattern
+              (node 'emp {:label "Person" :asserts {:name "'&employer'"}})
+              (node 'worker)
+              (edge 'e {:label "works_for" :src 'worker :tar 'emp}))
+       :delete ['e]})
+````
+![let_one_go!](https://raw.githubusercontent.com/jenshweber/grape/master/doc/images/let_one_go!.png)
+
+This rule "fires" once employee of a named employer (by deleting the _works_for_ relationship).
+Now consider the case where you want to define a function that fires _two_ employees. If course, you could simply call _let_one_go!_ twice. However, if the employer only has one employee left to fire, only one would be let go. In some cases, we may want "all or nothing" semantics (ACID transactions). Grape provides this functionality with the _transact_ form. Transactions are defined as follows:
+
+```clojure
+(transact
+     ['let_one_go! employer]
+     ['let_one_go! employer])
+```
+The above form defines a transaction that executes _let_one_go!_ twice (if possible) or makes no change at all. A transaction is invoked with the _attempt_ function, which returns true if (and only if) the entire transaction succeeds.
+
+```clojure
+(attempt
+   (transact
+     ['let_one_go! employer]
+     ['let_one_go! employer]))
+```
+Of course, transactions can be used to define Clojure operations:
+
+```clojure
+(defn fire-two!
+  [employer]
+  (attempt
+   (transact
+     ['let_one_go! employer]
+     ['let_one_go! employer])))
+```
 
 ## Syntax checks and static analysis
 Grape implements checks for syntactical ans static semantical correctness and will through exceptions if errors are found during rule definition. For example the following rule is considered incorrect with respect to Grape's syntax definition, as the rule name is a string and not a symbol:
