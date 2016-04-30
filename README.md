@@ -23,9 +23,10 @@ The following rule creates only one node. It has an empty ```:read``` and ```del
 (rule 'create-jens! 
       {:create 
           (pattern 
-            (node 'n {:label "Person" :asserts {:name "Jens"}}))}))
+            (node 'n {:label "Person" :asserts {:name "'Jens'"}}))}))
 ```
-The ```node``` form is used to specify the node to be created. Grape currently supports only one (optional) type label for nodes, but multiple (optional) property assigments (assert).
+The ```node``` form is used to specify the node to be created. Grape currently supports only one (optional) type label for nodes, but multiple (optional) property definitions (asserts). Properties are defined using maps. Note that the value of the maps is always a clojure String that wraps the actual expression that defines the Grape property. Thus, if you need a String value in grape, you need to use (single) quotes within the clojure value string, as exemplified above.
+
 The visual representation of the above rule is given in the image below. Here we use the popular "inline" notation of rewrite rules, where green coloured shapes mark those graph elements that are being created, i.e., graph elements that appear on the right hand side of the rule, but not on the left-hand side.
 
 ![createJens](https://raw.githubusercontent.com/jenshweber/grape/master/doc/images/create-jens!.png)
@@ -44,11 +45,11 @@ Our first example rule was not very versatile, since it could not generate diffe
 (rule 'create-person! ['p]
       {:create 
        (pattern 
-        (node 'n {:label "Person" :asserts {:name 'p}}))})
+        (node 'n {:label "Person" :asserts {:name "'&p'"}}))})
 ```
 ![createJens](https://raw.githubusercontent.com/jenshweber/grape/master/doc/images/create-person!.png)
 
-Formal parameters must be actualized when the rule is applied. The rule application below creates a Person node with name "Flo".
+Formal parameters _p_ must be actualized when the rule is applied. The rule application below creates a Person node with name "Flo". Note that the expression _&p_ is replaced with the value of the actual parameter _p_ at rule execution time. 
 ```clojure
 (create-person! "Flo")
 ```
