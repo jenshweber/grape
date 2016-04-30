@@ -60,8 +60,8 @@ The the next rule has a _read_ as well as a _create_ part. It matches two Person
 ```clojure
 (rule 'parent_of! ['p 'c]
       { :read (pattern 
-               (node 'f {:label "Person" :asserts {:name 'c}})
-               (node 'j {:label "Person" :asserts {:name 'p}}))
+               (node 'f {:label "Person" :asserts {:name "'&c'"}})
+               (node 'j {:label "Person" :asserts {:name "'&p'"}}))
         :create (pattern 
                  (edge 'e {:label "parent_of" :src 'j :tar 'f} )
                  )})
@@ -76,8 +76,8 @@ The following rule is similar to Example 3.
 ```clojure
 (rule 'works_for! ['e 's] 
       { :read (pattern 
-                (node 'f {:label "Person" :asserts {:name 's}})
-                (node 'j {:label "Person" :asserts {:name 'e}}))
+                (node 'f {:label "Person" :asserts {:name "'&s'"}})
+                (node 'j {:label "Person" :asserts {:name "'&e'"}}))
         :create (pattern 
                  (edge 'e {:label "works_for" :src 'j :tar 'f} ))})
 ```
@@ -95,8 +95,8 @@ However, we cannot use it to express sitations where a person is self-employed, 
 ```clojure
 (rule 'works_for! ['e 's] 
       { :read (pattern :homo
-                (node 'f {:label "Person" :asserts {:name 's}})
-                (node 'j {:label "Person" :asserts {:name 'e}}))
+                (node 'f {:label "Person" :asserts {:name "'&s'"}})
+                (node 'j {:label "Person" :asserts {:name "'&e'"}}))
         :create (pattern 
                  (edge 'e {:label "works_for" :src 'j :tar 'f} ))})
 ```
@@ -114,19 +114,19 @@ rule 'rewrite_contract!
                (edge 'e {:label "works_for" :src 'n1 :tar 'n2}))
         :delete ['e]
         :create (pattern
-                 (node 'n3 {:label "Contract" :asserts {:name "Contract" :with 'n1.name}})
+                 (node 'n3 {:label "Contract" :asserts {:name "'Contract'" :with "n1.name"}})
                  (edge 'e1 {:label "employer" :src 'n3 :tar 'n2})
                  (edge 'e2 {:label "employee" :src 'n3 :tar 'n1}))})
 ```
 ![createJens](https://raw.githubusercontent.com/jenshweber/grape/master/doc/images/rewrite_contract!.png)
-Another interesting aspect abot the above rule is that the _create_ part of the rule copies an attribute from a graph element matched in the _read_ part of the rule (```n1.name```).
+Another interesting aspect about the above rule is that the _create_ part of the rule copies an attribute from a graph element matched in the _read_ part of the rule (```n1.name```).
 
 ### Example 6: Dealing with "dangling" edges
 Consider the following rule whose purpose it is to "fire" an employee with a given name (by deleting the contract node). 
 ```clojure
 (rule 'fire-employee! ['name] 
       {:read (pattern
-              (node 'emp {:label "Person" :asserts {:name 'name}})
+              (node 'emp {:label "Person" :asserts {:name "'&name'"}})
               (node 'con)
               (edge 'e {:label "employee" :src 'con :tar 'emp}))
        :delete ['con]})
@@ -138,7 +138,7 @@ But what happens to the 'employee' edge _e_ when the contract node _con_ is dele
 (rule 'fire-employee! ['name] 
       {:theory 'dpo
        :read (pattern
-              (node 'emp {:label "Person" :asserts {:name 'name}})
+              (node 'emp {:label "Person" :asserts {:name "'&name'"}})
               (node 'con)
               (edge 'e {:label "employee" :src 'con :tar 'emp}))
        :delete ['con]})
@@ -148,8 +148,8 @@ Negative applications conditions (NACs) are conditions that, if met, inhibit a r
 ```clojure
 (rule 'works_for2! ['e 's]
       { :read (pattern
-               (node 'f {:label "Person" :asserts {:name 's}})
-               (node 'j {:label "Person" :asserts {:name 'e}})
+               (node 'f {:label "Person" :asserts {:name "'&s'"}})
+               (node 'j {:label "Person" :asserts {:name "'&e'"}})
                (NAC 1
                 (edge 'e1 {:label "works_for" :src 'j :tar 'f} )))
         :create (pattern
@@ -177,7 +177,7 @@ Grape implements checks for syntactical ans static semantical correctness and wi
  (rule "testrule"
        {:create
         (pattern
-         (node 'n {:label "Person" :asserts {:name "Jens"}}))})
+         (node 'n {:label "Person" :asserts {:name "'Jens'"}}))})
 ```
 An exception with the following message will be thrown in this case:
 ```
@@ -193,7 +193,7 @@ Likewise, here is an example for a syntactically correct rule that has problems 
 (rule 'testrule
        {:create
         (pattern
-         (node 'n {:label "Person" :asserts {:name 'id}}))})
+         (node 'n {:label "Person" :asserts {:name "'@id'"}}))})
 ```
 The exception thrown may look as follows:
 ```
