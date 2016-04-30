@@ -40,6 +40,7 @@
         :create (pattern
                  (edge 'd {:label "works_for" :src 'j :tar 'f} ))})
 
+
 (works_for! "Flo" "Jens")
 
 (works_for! "Jens" "Jens")
@@ -67,6 +68,7 @@
               (node 'con)
               (edge 'e {:label "employee" :src 'con :tar 'emp}))
        :delete ['con]})
+
 
 
 (fire-employee! "Flo")
