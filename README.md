@@ -160,8 +160,32 @@ NACs are specified using 'NAC' forms, which essentially specifiy graph patterns 
 
 ![works_for1!](https://raw.githubusercontent.com/jenshweber/grape/master/doc/images/works_for2!.png)
 
-### Example 8: Repeatedly applying a rule
-A rule can be applied repeatedly using the _while_ form. Given the following example rule that deletes any node, we can simply delete the entire graph using _while_:
+### Example 9: Rule with multiple NACs
+
+This example shows a rule with multiple (two) NACs. The rule creates a _sole_employer_ relationship between an employee and an employer, if the employee works for only that single employer (and a _sole_employer_ relationship does not yet exist).
+
+```clojure
+(rule 'sole_employer! []
+      { :read (pattern
+               (node 'f )
+               (node 'j )
+               (edge 'e1 {:label "works_for" :src 'j :tar 'f})
+               (NAC 1
+                (node 'f2)
+                (edge 'e2 {:label "works_for" :src 'j :tar 'f2})
+                )
+               (NAC 2
+                (edge 'e3 {:label "sole_employer" :src 'j :tar 'f} )))
+
+        :create (pattern
+                 (edge 'e4 {:label "sole_employer" :src 'j :tar 'f} ))
+        })
+```
+
+![sole_employer!](https://raw.githubusercontent.com/jenshweber/grape/master/doc/images/sole_employer!.png)
+
+### Example 9: Rules as building blocks in Clojure programs
+Of course, rules can be used within Clojure programs. For example, a rule can be applied repeatedly using the _while_ form. Given the following example rule that deletes any node, we can simply delete the entire graph using _while_:
 ```clojure
 (rule 'delete-any-node!
       {:read (pattern (node 'n))
@@ -170,6 +194,12 @@ A rule can be applied repeatedly using the _while_ form. Given the following exa
 (while (delete-any-node!))
 ```
 ![createJens](https://raw.githubusercontent.com/jenshweber/grape/master/doc/images/delete-any-node!.png)
+
+However, Grape provides special control structures that support transactions. This is explained in the next few examples.
+
+### Example 10: Transactions
+
+
 
 ## Syntax checks and static analysis
 Grape implements checks for syntactical ans static semantical correctness and will through exceptions if errors are found during rule definition. For example the following rule is considered incorrect with respect to Grape's syntax definition, as the rule name is a string and not a symbol:
