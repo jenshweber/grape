@@ -10,8 +10,10 @@
                  [org.clojure/data.codec "0.1.0"]
                  [prismatic/schema "1.0.5"]
                  [clojurewerkz/neocons "3.1.0"]
+                 [com.taoensso/timbre "4.3.1"]
                  [environ "1.0.2"]]
   :plugins [[lein-environ "1.0.2"]]
   :profiles {:dev {}}
+  :jvm-opts ["-Xmx1g" "-server"]
 )
 

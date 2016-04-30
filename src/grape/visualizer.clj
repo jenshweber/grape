@@ -24,10 +24,7 @@
   (if (empty? as)
     ""
     (str (reduce (partial str-sep "\n") (map (fn [[k v]]
-                                               (str (name k) "="
-                                                    (if (symbol? v)
-                                                      v
-                                                      (str "'" v "'")))) as)))))
+                                               (str (name k) "=" v)) as)))))
 
 (defn node->dot [n c o]
   (let [p (second n)
@@ -49,7 +46,8 @@
         l (:label p)
         as (:asserts p)]
     (str " " src " -> " tar
-         " [color=" c " penwidth=bold len=2 constraint=false fontcolor=" c " " o
+  ;       " [color=" c " penwidth=bold len=2 constraint=false fontcolor=" c " " o
+          " [color=" c " penwidth=bold len=2  fontcolor=" c " " o
          " label=\"" l
          (if (empty? as)
            ""
@@ -67,15 +65,29 @@
         p (nth nac 2)]
     (pattern->dot p [] c c " style=dashed ")))
 
+(defn cond->dot
+  "translate a condition to dot"
+  [c]
+  (str " cond [color=lightgrey style=filled shape=house label=\"" (second c) "\"]"))
+
+(defn assign->dot
+  "translate an assignment to dot"
+  [c]
+  (str " ass [color=seagreen1 style=filled shape=invhouse label=\"" (second c) "\"]"))
+
+
 (defn graphelem->dot [d c1 c2 o e]
   "Translate a graph element to dorothy - either node or edge"
   (let [t (first e)
         id (:id (second e))
         c (if (nil? (some #{id} d)) c1 c2)]
     (cond
-     (= 'node t) (node->dot e c o)
-     (= 'edge t) (edge->dot e c o)
-     (= 'NAC t) (NAC->dot e)
+      (= 'node t) (node->dot e c o)
+      (= 'edge t) (edge->dot e c o)
+      (= 'NAC t) (NAC->dot e)
+      (= 'cond t) (cond->dot e)
+      (= 'assign t) (assign->dot e)
+
      :else
      (throw (Exception. "Invalid graph element"))
      )))

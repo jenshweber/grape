@@ -104,6 +104,7 @@
         nacs (reduce (fn [xs x] (if (= 'NAC (first x)) (cons (nth x 2) xs) xs)) '() (:els (second (:read r))))
         st5 (reduce (fn [st n] (add-graph-elements-to-symtable st :nac n)) st4 nacs)
         ]
-    (doall (map validate-st-entry st5))
+    ;(doall (map validate-st-entry st5))
+    true
     ))
 
