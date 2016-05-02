@@ -380,7 +380,7 @@ Sometimes we may want to try different rule applications non-deterministically. 
        (pattern
         (edge 'e1 {:label "likes" :src 'n1 :tar 'n2}))})
 ```
-![KimLikesJohn?](https://raw.githubusercontent.com/jenshweber/grape/master/doc/images/KimLikesJohn%3F.png)
+![KimLikesJohn!](https://raw.githubusercontent.com/jenshweber/grape/master/doc/images/KimLikesJohn!.png)
 
 ```clojure
 (rule 'JohnLikesKim!
@@ -392,7 +392,7 @@ Sometimes we may want to try different rule applications non-deterministically. 
        (pattern
         (edge 'e1 {:label "likes" :src 'n2 :tar 'n1}))})
 ```
-![JohnLikesKim?](https://raw.githubusercontent.com/jenshweber/grape/master/doc/images/JohnLikesKim%3F.png)
+![JohnLikesKim1](https://raw.githubusercontent.com/jenshweber/grape/master/doc/images/JohnLikesKim!.png)
 
 and the following start graph:
 
