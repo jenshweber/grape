@@ -364,6 +364,69 @@ This can be accomplished by using the Grape ```until``` control structure. The f
 (attempt (until 'chain_of_likes? ['dislike_one]))
 ```
 
+Similar to loops in other programming languages, ```until``` control structures may not necessarily terminate. Of course, the above example program quite clearly terminates, as each iteration removes a ```likes``` edge from the graph - and the number of these edges is finite. However, in general, transactions that use ```until``` may loop forever. 
+
+### Example 13: Control structures: ```Choice```
+
+Sometimes we may want to try different rule applications non-deterministically. The ```choice``` constrol structure can be used for this. Consider the following two rules:
+
+```clojure
+(rule 'KimLikesJohn!
+      {:read
+       (pattern
+        (node 'n1 {:label "Kim"})
+        (node 'n2 {:label "John"}))
+       :create
+       (pattern
+        (edge 'e1 {:label "likes" :src 'n1 :tar 'n2}))})
+```
+![KimLikesJohn?](https://raw.githubusercontent.com/jenshweber/grape/master/doc/images/KimLikesJohn?.png)
+
+```clojure
+(rule 'JohnLikesKim!
+      {:read
+       (pattern
+        (node 'n1 {:label "Kim"})
+        (node 'n2 {:label "John"}))
+       :create
+       (pattern
+        (edge 'e1 {:label "likes" :src 'n2 :tar 'n1}))})
+```
+![JohnLikesKim?](https://raw.githubusercontent.com/jenshweber/grape/master/doc/images/JohnLikesKim?.png)
+
+and the following start graph:
+
+```clojure
+(rule 'setup3!
+      {:create
+       (pattern
+        (node 'n1 {:label "Kim"})
+        (node 'n2 {:label "John"})
+        (edge 'e1 {:label "likes" :src 'n1 :tar 'n2}))})
+```
+![setup3!](https://raw.githubusercontent.com/jenshweber/grape/master/doc/images/setup3!.png)
+
+The following program will non-deterministically choose one of the two above rules so that the graph test ```likeEachOther?``` is met:
+
+```clojure
+(attempt
+  (choice ['KimLikesJohn!]
+          ['JohnLikesKim!])
+  ['likeEachOther?])
+```
+The graph test ```likeEachOther? ``` is defined as:
+
+```clojure
+(rule 'likeEachOther?
+      {:read
+       (pattern
+        (node 'n1 {:label "Kim"})
+        (node 'n2 {:label "John"})
+        (edge 'e1 {:label "likes" :src 'n2 :tar 'n1})
+        (edge 'e2 {:label "likes" :src 'n1 :tar 'n2}))})
+```
+![likeEachOther?](https://raw.githubusercontent.com/jenshweber/grape/master/doc/images/likeEachOther?.png)
+
 ## Syntax checks and static analysis
 Grape implements checks for syntactical ans static semantical correctness and will through exceptions if errors are found during rule definition. For example the following rule is considered incorrect with respect to Grape's syntax definition, as the rule name is a string and not a symbol:
 ```clojure
@@ -381,7 +444,8 @@ NAME, PAR, ID :- *symbol*
 PATTERN       := (pattern ...)
  ... where <> denotes an optional element, | denotes an alternative choice, and N+ denotes a list of elements
 ```
-Likewise, here is an example for a syntactically correct rule that has problems with respect to static semantics. (In this case an undeclared identifier is referenced.)
+Likewise, here is an example for a syntactically correct rule that has problems with respect to static semantics. (In this case an undeclared identifier is referenced.) Consider the following simple example rules:
+
 ```clojure
 (rule 'testrule
        {:create
