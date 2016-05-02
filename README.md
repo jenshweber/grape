@@ -358,6 +358,12 @@ Now let's assume that we want a transaction that repeatedly deletes ```likes``` 
 ```
 ![chain_of_likes?](https://raw.githubusercontent.com/jenshweber/grape/master/doc/images/chain_of_likes?.png)
 
+This can be accomplished by using the Grape ```until``` control structure. The first argument of an ``until`` function is the _completion condition_ (which must be side-effect free). Then then one or several Grape rules (or other control structures) can be called. Here is the program for the above example:
+
+```clojure
+(attempt (until 'chain_of_likes? ['dislike_one]))
+```
+
 ## Syntax checks and static analysis
 Grape implements checks for syntactical ans static semantical correctness and will through exceptions if errors are found during rule definition. For example the following rule is considered incorrect with respect to Grape's syntax definition, as the rule name is a string and not a symbol:
 ```clojure
