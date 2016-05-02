@@ -160,7 +160,7 @@ NACs are specified using 'NAC' forms, which essentially specifiy graph patterns 
 
 ![works_for1!](https://raw.githubusercontent.com/jenshweber/grape/master/doc/images/works_for2!.png)
 
-### Example 9: Rule with multiple NACs
+### Example 8: Rule with multiple NACs
 
 This example shows a rule with multiple (two) NACs. The rule creates a _sole_employer_ relationship between an employee and an employer, if the employee works for only that single employer (and a _sole_employer_ relationship does not yet exist).
 
@@ -185,7 +185,7 @@ This example shows a rule with multiple (two) NACs. The rule creates a _sole_emp
 ![sole_employer!](https://raw.githubusercontent.com/jenshweber/grape/master/doc/images/sole_employer!.png)
 
 ### Example 9: Rules as building blocks in Clojure programs
-Of course, rules can be used within Clojure programs. For example, a rule can be applied repeatedly using the _while_ form. Given the following example rule that deletes any node, we can simply delete the entire graph using _while_:
+Of course, rules can be used within Clojure programs. For example, a rule can be applied repeatedly using the ```while_ form``` Given the following example rule that deletes any node, we can simply delete the entire graph using ```while```:
 ```clojure
 (rule 'delete-any-node!
       {:read (pattern (node 'n))
@@ -199,7 +199,7 @@ However, Grape provides special control structures that support transactions. Th
 
 ### Example 10: Transactions
 
-Grape supports atomic transactions. Consider the following rule _let_one_go!_ as an example:
+Grape supports atomic transactions. Consider the following rule ```let_one_go!``` as an example:
 
 ```clojure
 (rule 'let_one_go! ['employer]
@@ -212,15 +212,15 @@ Grape supports atomic transactions. Consider the following rule _let_one_go!_ as
 ````
 ![let_one_go!](https://raw.githubusercontent.com/jenshweber/grape/master/doc/images/let_one_go!.png)
 
-This rule "fires" once employee of a named employer (by deleting the _works_for_ relationship).
-Now consider the case where you want to define a function that fires _two_ employees. If course, you could simply call _let_one_go!_ twice. However, if the employer only has one employee left to fire, only one would be let go. In some cases, we may want "all or nothing" semantics (ACID transactions). Grape provides this functionality with the _transact_ form. Transactions are defined as follows:
+This rule "fires" once employee of a named employer (by deleting the ```works_for``` relationship).
+Now consider the case where you want to define a function that fires _two_ employees. If course, you could simply call ```let_one_go!``` twice. However, if the employer only has one employee left to fire, only one would be let go. In some cases, we may want "all or nothing" semantics (ACID transactions). Grape provides this functionality with the ```transact``` form. Transactions are defined as follows:
 
 ```clojure
 (transact
      ['let_one_go! employer]
      ['let_one_go! employer])
 ```
-The above form defines a transaction that executes _let_one_go!_ twice (if possible) or makes no change at all. A transaction is invoked with the _attempt_ function, which returns true if (and only if) the entire transaction succeeds.
+The above form defines a transaction that executes ```let_one_go!``` twice (if possible) or makes no change at all. A transaction is invoked with the _attempt_ function, which returns true if (and only if) the entire transaction succeeds.
 
 ```clojure
 (attempt
@@ -238,6 +238,73 @@ Of course, transactions can be used to define Clojure operations:
      ['let_one_go! employer]
      ['let_one_go! employer])))
 ```
+
+### Example 11: Backtracking
+
+A Grape rule may have multiple possible applications in a host graph. Grape supports _backtracking_ when working with transactions. Consider the following rules ```hire!``` and ```promote!``` as an example. The first rule (```hire!```) recruits a worker on the job market for a given employer ```name```.
+
+```clojure
+(rule 'hire! ['name]
+      {:read (pattern
+              (node 'm {:label "Employer" :asserts {:name "'&name'"}})
+              (node 'w {:label "Worker"})
+              (NAC
+               (edge 'e {:label "works_for" :src 'w :tar 'm})))
+       :create (pattern
+                (edge 'e {:label "works_for" :src 'w :tar 'm}))})
+```
+![hire!](https://raw.githubusercontent.com/jenshweber/grape/master/doc/images/hire!.png)
+
+The second rule (```promote!```) promotes one of the workers who work for employer ```name``` to become a ```Director```, but only if that worker does not also work for a different employer.
+
+```clojure
+(rule 'promote! ['name]
+      {:read (pattern
+              (node 'm {:label "Employer" :asserts {:name "'&name'"}})
+              (node 'w {:label "Worker"})
+              (edge 'e {:label "works_for" :src 'w :tar 'm})
+              (NAC
+               (node 'm2)
+               (edge 'en {:label "works_for" :src 'w :tar 'm2}))
+              )
+       :delete ['w]
+       :create (pattern
+                (node 'd {:label "Director"})
+                (edge 'f {:label "works_for" :src 'd :tar 'm})
+                )})
+```
+![promote!](https://raw.githubusercontent.com/jenshweber/grape/master/doc/images/promote!.png)
+
+Now consider the following transaction ```hire_director!``` that consists of hiring a worker and then promoting the worker to become a director.
+
+```clojure
+(defn hire_director! [employer]
+    (transact
+     ['hire! employer]
+     ['promote! employer]))
+```
+
+In general, there will be many possible matches for ```hire!```. However, only those workers can be promoted to Director, which do not also work for a different employer. Therefore, transaction ``hire_director!``` may need to backtrack in order to search for a worker that can be promoted. For example, consider the following job market that has four workers and four employers:
+
+```clojure
+(rule 'setup-job-market!
+      {:create
+       (pattern
+        (node 'w1 {:label "Worker"})
+        (node 'w2 {:label "Worker"})
+        (node 'w3 {:label "Worker"})
+        (node 'w4 {:label "Worker"})
+        (node 'm1 {:label "Employer" :asserts {:name "'Jens'"}})
+        (node 'm2 {:label "Employer" })
+        (node 'm3 {:label "Employer" })
+        (node 'm4 {:label "Employer" })
+        (edge 'e1 {:label "works_for" :src 'w1 :tar 'm2})
+        (edge 'e2 {:label "works_for" :src 'w2 :tar 'm3})
+        (edge 'e3 {:label "works_for" :src 'w3 :tar 'm4}))})
+```
+![setup-job-market!](https://raw.githubusercontent.com/jenshweber/grape/master/doc/images/setup-job-market!.png)
+
+Attempting to hire a Director for employer "Jens" (```(attempt (hire_director! "Jens"))```) may attempt to hire any of the workers but only succeed with promoting worker ```w4```, as all other workers also work for other employers. Grape will find this only possible match by using backtracking.
 
 ## Syntax checks and static analysis
 Grape implements checks for syntactical ans static semantical correctness and will through exceptions if errors are found during rule definition. For example the following rule is considered incorrect with respect to Grape's syntax definition, as the rule name is a string and not a symbol:
