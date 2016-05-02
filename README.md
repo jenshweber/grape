@@ -339,6 +339,25 @@ Moreover, consider the following rule, which deletes a ```likes``` relationship 
 ```
 ![dislike_one!](https://raw.githubusercontent.com/jenshweber/grape/master/doc/images/dislike_one!.png)
 
+Now let's assume that we want a transaction that repeatedly deletes ```likes``` relationships until there is a unidirectional cycle of ```likes``` relationships in the graph. Formally, this condition can be expressed in the following graph test:
+
+```clojure
+(rule 'chain_of_likes?
+      {:read (pattern
+              (node 'n1)
+              (node 'n2 )
+              (node 'n3 )
+              (edge 'e1 {:label "likes" :src 'n1 :tar 'n2})
+              (edge 'e2 {:label "likes" :src 'n2 :tar 'n3})
+              (edge 'e3 {:label "likes" :src 'n3 :tar 'n1})
+              (NAC 1 :homo
+                   (node 'n5)
+                   (node 'n6)
+                   (edge 'e5 {:label "likes" :src 'n5 :tar 'n6})
+                   (edge 'e6 {:label "likes" :src 'n6 :tar 'n5})))})
+```
+![chain_of_likes?](https://raw.githubusercontent.com/jenshweber/grape/master/doc/images/chain_of_likes?.png)
+
 ## Syntax checks and static analysis
 Grape implements checks for syntactical ans static semantical correctness and will through exceptions if errors are found during rule definition. For example the following rule is considered incorrect with respect to Grape's syntax definition, as the rule name is a string and not a symbol:
 ```clojure
