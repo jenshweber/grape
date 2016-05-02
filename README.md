@@ -427,6 +427,60 @@ The graph test ```likeEachOther? ``` is defined as:
 ```
 ![likeEachOther?](https://raw.githubusercontent.com/jenshweber/grape/master/doc/images/likeEachOther%3F.png)
 
+### Example 13: Control structures: ```Avoid```
+Sometimes we may want to specify a condition to avoid in a transaction. To some degree, this can be achieved by using Negative Application Conditions (NACs) attached to rules (see above). However, the expressiveness of NACs is limited. Therefore, Grape provides the ```avoid``` control structure. 
+
+Consider the following start graph
+
+```clojure
+(rule 'setup4!
+      {:create
+       (pattern
+        (node 'n1)
+        (node 'n2 )
+        (node 'n3 )
+        (node 'n4 {:label "A"} )
+        (node 'n5 )
+        (edge 'e1 {:label "relates" :src 'n1 :tar 'n4})
+        (edge 'e2 {:label "relates" :src 'n2 :tar 'n4})
+        (edge 'e3 {:label "relates" :src 'n3 :tar 'n4}))})
+```
+![setup4!](https://raw.githubusercontent.com/jenshweber/grape/master/doc/images/setup4!.png)
+
+and the following rule that creates a ```relates``` relationship between an arbitrary node and the node with label "A".
+
+```clojure
+(rule 'relate-one!
+      {:read
+       (pattern
+        (node 'n1)
+        (node 'n4 {:label "A"}))
+       :create
+       (pattern
+        (edge 'e1 {:label "relates" :src 'n1 :tar 'n4}))})
+```
+![relate-one!](https://raw.githubusercontent.com/jenshweber/grape/master/doc/images/relate-one!.png)
+
+The following Grape program tries out all possible (4) matches for ```relate-one!``` so that graph test ```double?``` fails (i.e., is avoided). 
+
+```clojure
+(attempt (transact ['relate-one!] 
+                   (avoid ['double?])))
+```
+
+Graph test ```double?``` is defined below:
+
+```clojure
+(rule 'double?
+      {:read
+       (pattern
+        (node 'n1 )
+        (node 'n4 {:label "A"} )
+        (edge 'e1 {:label "relates" :src 'n1 :tar 'n4})
+        (edge 'e2 {:label "relates" :src 'n1 :tar 'n4}))})
+```
+![double](https://raw.githubusercontent.com/jenshweber/grape/master/doc/images/double%3F.png)
+
 ## Syntax checks and static analysis
 Grape implements checks for syntactical ans static semantical correctness and will through exceptions if errors are found during rule definition. For example the following rule is considered incorrect with respect to Grape's syntax definition, as the rule name is a string and not a symbol:
 ```clojure
