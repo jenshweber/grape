@@ -356,7 +356,7 @@ Now let's assume that we want a transaction that repeatedly deletes ```likes``` 
                    (edge 'e5 {:label "likes" :src 'n5 :tar 'n6})
                    (edge 'e6 {:label "likes" :src 'n6 :tar 'n5})))})
 ```
-![chain_of_likes?](https://raw.githubusercontent.com/jenshweber/grape/master/doc/images/chain_of_likes?.png)
+![chain_of_likes?](https://raw.githubusercontent.com/jenshweber/grape/master/doc/images/chain_of_likes%3F.png)
 
 This can be accomplished by using the Grape ```until``` control structure. The first argument of an ``until`` function is the _completion condition_ (which must be side-effect free). Then then one or several Grape rules (or other control structures) can be called. Here is the program for the above example:
 
@@ -380,7 +380,7 @@ Sometimes we may want to try different rule applications non-deterministically. 
        (pattern
         (edge 'e1 {:label "likes" :src 'n1 :tar 'n2}))})
 ```
-![KimLikesJohn?](https://raw.githubusercontent.com/jenshweber/grape/master/doc/images/KimLikesJohn?.png)
+![KimLikesJohn?](https://raw.githubusercontent.com/jenshweber/grape/master/doc/images/KimLikesJohn%3F.png)
 
 ```clojure
 (rule 'JohnLikesKim!
@@ -392,7 +392,7 @@ Sometimes we may want to try different rule applications non-deterministically. 
        (pattern
         (edge 'e1 {:label "likes" :src 'n2 :tar 'n1}))})
 ```
-![JohnLikesKim?](https://raw.githubusercontent.com/jenshweber/grape/master/doc/images/JohnLikesKim?.png)
+![JohnLikesKim?](https://raw.githubusercontent.com/jenshweber/grape/master/doc/images/JohnLikesKim%3F.png)
 
 and the following start graph:
 
@@ -425,7 +425,7 @@ The graph test ```likeEachOther? ``` is defined as:
         (edge 'e1 {:label "likes" :src 'n2 :tar 'n1})
         (edge 'e2 {:label "likes" :src 'n1 :tar 'n2}))})
 ```
-![likeEachOther?](https://raw.githubusercontent.com/jenshweber/grape/master/doc/images/likeEachOther?.png)
+![likeEachOther?](https://raw.githubusercontent.com/jenshweber/grape/master/doc/images/likeEachOther%3F.png)
 
 ## Syntax checks and static analysis
 Grape implements checks for syntactical ans static semantical correctness and will through exceptions if errors are found during rule definition. For example the following rule is considered incorrect with respect to Grape's syntax definition, as the rule name is a string and not a symbol:
