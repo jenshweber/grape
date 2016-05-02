@@ -284,7 +284,7 @@ Now consider the following transaction ```hire_director!``` that consists of hir
      ['promote! employer]))
 ```
 
-In general, there will be many possible matches for ```hire!```. However, only those workers can be promoted to Director, which do not also work for a different employer. Therefore, transaction ``hire_director!``` may need to backtrack in order to search for a worker that can be promoted. For example, consider the following job market that has four workers and four employers:
+In general, there will be many possible matches for ```hire!```. However, only those workers can be promoted to Director, which do not also work for a different employer. Therefore, transaction ```hire_director!``` may need to backtrack in order to search for a worker that can be promoted. For example, consider the following job market that has four workers and four employers:
 
 ```clojure
 (rule 'setup-job-market!
@@ -304,7 +304,40 @@ In general, there will be many possible matches for ```hire!```. However, only t
 ```
 ![setup-job-market!](https://raw.githubusercontent.com/jenshweber/grape/master/doc/images/setup-job-market!.png)
 
-Attempting to hire a Director for employer "Jens" (```(attempt (hire_director! "Jens"))```) may attempt to hire any of the workers but only succeed with promoting worker ```w4```, as all other workers also work for other employers. Grape will find this only possible match by using backtracking.
+Attempting to hire a Director for employer "Jens" ```(attempt (hire_director! "Jens"))``` may attempt to hire any of the workers but only succeed with promoting worker ```w4```, as all other workers also work for other employers. Grape will find this only possible match by using backtracking.
+
+### Example 12: Control structures: ```Until```
+
+Sometimes we may need additional control structures in transactions. For example, consider the following graph setup:
+
+```clojure
+(rule 'setup-likes!
+      {:create
+       (pattern
+        (node 'n1)
+        (node 'n2 )
+        (node 'n3 )
+        (edge 'e1 {:label "likes" :src 'n1 :tar 'n2})
+        (edge 'e2 {:label "likes" :src 'n1 :tar 'n3})
+        (edge 'e3 {:label "likes" :src 'n2 :tar 'n1})
+        (edge 'e4 {:label "likes" :src 'n2 :tar 'n3})
+        (edge 'e5 {:label "likes" :src 'n3 :tar 'n2})
+        (edge 'e6 {:label "likes" :src 'n3 :tar 'n1}))})
+
+```
+![setup-likes!](https://raw.githubusercontent.com/jenshweber/grape/master/doc/images/setup-likes!.png)
+
+Moreover, consider the following rule, which deletes a ```likes``` relationship between two arbitrary nodes.
+
+```clojure
+(rule 'dislike_one!
+      {:read (pattern
+              (node 'n1)
+              (node 'n2)
+              (edge 'e {:label "likes" :src 'n1 :tar 'n2}))
+       :delete ['e]})
+```
+![dislike_one!](https://raw.githubusercontent.com/jenshweber/grape/master/doc/images/dislike_one!.png)
 
 ## Syntax checks and static analysis
 Grape implements checks for syntactical ans static semantical correctness and will through exceptions if errors are found during rule definition. For example the following rule is considered incorrect with respect to Grape's syntax definition, as the rule name is a string and not a symbol:
@@ -335,6 +368,9 @@ The exception thrown may look as follows:
 Grape static analysis error: identifier id is used but not declared
 ```
 Note, though, that Grape is schema-less, i.e., there is no need / ability to define a graph schema type for rules. Thus, Grape has no means of checking whether rule definitions are compliant to a particular graph class.
+
+
+
 
 ## Rule Visualization and Documentation ##
 
