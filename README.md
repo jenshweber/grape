@@ -427,7 +427,7 @@ The graph test ```likeEachOther? ``` is defined as:
 ```
 ![likeEachOther?](https://raw.githubusercontent.com/jenshweber/grape/master/doc/images/likeEachOther%3F.png)
 
-### Example 13: Control structures: ```Avoid```
+### Example 14: Control structures: ```Avoid```
 Sometimes we may want to specify a condition to avoid in a transaction. To some degree, this can be achieved by using Negative Application Conditions (NACs) attached to rules (see above). However, the expressiveness of NACs is limited. Therefore, Grape provides the ```avoid``` control structure. 
 
 Consider the following start graph
@@ -479,7 +479,105 @@ Graph test ```double?``` is defined below:
         (edge 'e1 {:label "relates" :src 'n1 :tar 'n4})
         (edge 'e2 {:label "relates" :src 'n1 :tar 'n4}))})
 ```
-![double](https://raw.githubusercontent.com/jenshweber/grape/master/doc/images/double%3F.png)
+![double?](https://raw.githubusercontent.com/jenshweber/grape/master/doc/images/double%3F.png)
+
+### Example 15: Attribute conditions and assignments - The Ferryman example
+We already saw how simple equality conditions on node and edge attributes can be expressed. For more complex conditions on attributes (for example inequalities), Grape provides a special ```condition``` form in the read part of rules. Moreover, Grape provides an ```assign``` form in the create part of rules to revise attribute values of machted graph elements. These two concepts are exemplified with the popular Ferryman problem. Consider a ferryman who is tasked to ship a goat, a cabbage and a wolf from one side of the river to the other side. The ferryman can only ship one thing at a time. Moreover, if left unsupervised, the wolf will eat the goat and the goat will eat the cabbage, respectively. The Ferryman problem is to find a sequence of actions to safely ship all three items to the other side. In Grape it can be described in the following transaction:
+
+```clojure
+  (until 'all_on_the_other_side?
+         (transact (choice ['ferry_one_over!]
+                           ['cross_empty!])
+                   (avoid ['wolf-can-eat-goat?]
+                          ['goat-can-eat-cabbage?])))
+```
+
+The start graph for the problem is shown here:
+
+```clojure
+(rule 'setup-ferryman!
+      {:create
+       (pattern
+         (node 'tg {:label "Thing" :asserts {:kind "'Goat'"}})
+         (node 'tc {:label "Thing" :asserts {:kind "'Cabbage'"}})
+         (node 'tw {:label "Thing" :asserts {:kind "'Wolf'"}})
+         (node 's1 {:label "Side" :asserts {:name "'This side'"}})
+         (node 's2 {:label "Side" :asserts {:name "'Other side'"}})
+         (node 'f  {:label "Ferry" :asserts {:name "'Ferryman'" :coins "7"}})
+         (edge 'e1 {:label "is_at" :src 'tg :tar 's1})
+         (edge 'e2 {:label "is_at" :src 'tc :tar 's1})
+         (edge 'e3 {:label "is_at" :src 'tw :tar 's1})
+         (edge 'e4 {:label "is_at" :src 'f :tar 's1})
+         )})
+```
+![setup-ferryman!](https://raw.githubusercontent.com/jenshweber/grape/master/doc/images/setup-ferryman!.png)
+
+... whereas the target condition of the transaction ```all_on_the_other_side?``` is specified below:
+
+```clojure
+(rule 'all_on_the_other_side?
+      {:read
+       (pattern :homo
+                (node 'tg {:label "Thing" :asserts {:kind "'Goat'"}})
+                (node 'tc {:label "Thing" :asserts {:kind "'Cabbage'"}})
+                (node 'tw {:label "Thing" :asserts {:kind "'Wolf'"}})
+                (node 's2 {:label "Side" :asserts {:name "'Other side'"}})
+                (edge 'e1 {:label "is_at" :src 'tg :tar 's2})
+                (edge 'e2 {:label "is_at" :src 'tc :tar 's2})
+                (edge 'e3 {:label "is_at" :src 'tw :tar 's2}))})
+```
+![all_on_the_other_side?](https://raw.githubusercontent.com/jenshweber/grape/master/doc/images/all_on_the_other_side%3F.png)
+
+The two graph tests specifying the dangerous conditions to avoid are:
+
+![goat-can-eat-cabbage?](https://raw.githubusercontent.com/jenshweber/grape/master/doc/images/goat-can-eat-cabbage%3F.png)
+
+![wolf-can-eat-goat?](https://raw.githubusercontent.com/jenshweber/grape/master/doc/images/wolf-can-eat-goat%3F.png)
+
+Now considering the above transaction definition (which uses an ``until`` control structure), the ferryman has a choice to ship one thing over or cross empty at any given iteration. This means that it is perfectly possible to loop endlessly. For example, the ferryman could take the goat for rides back and forth forever. Or the ferryman may cross empty forever. In order to bound the search, each trip across the river costs a coin - and we give the ferryman initially a purse of 7 gold coins to start with. Each time the ferryman crosses, it needs to be checked whether the ferryman still has a coin left - and once he reaches the other side, the number of coins needs to be reduced. This is done with Grape ```condition``` and ```assign``` forms, respectively. The following example shows their use:
+
+```clojure
+(rule 'ferry_one_over!
+      {:read
+       (pattern
+         (node 's1 {:label "Side"})
+         (node 's2 {:label "Side"})
+         (node 'f {:label "Ferry"})
+         (node 't {:label "Thing"})
+         (edge 'et {:label "is_at" :src 't :tar 's1})
+         (edge 'e {:label "is_at" :src 'f :tar 's1})
+         (condition "f.coins > 0"))
+       :delete ['e 'et]
+       :create
+       (pattern
+         (edge 'en {:label "is_at" :src 'f :tar 's2})
+         (edge 'et2 {:label "is_at" :src 't :tar 's2})
+         (assign "f.coins=f.coins-1"))})
+```
+![ferry_one_over!](https://raw.githubusercontent.com/jenshweber/grape/master/doc/images/ferry_one_over!.png)
+
+The rule that defines empty crosses is specified similarly.
+
+```clojure
+(rule 'cross_empty!
+      {:read
+       (pattern
+         (node 's1 {:label "Side"})
+         (node 's2 {:label "Side"})
+         (node 'f {:label "Ferry"})
+         (edge 'e {:label "is_at" :src 'f :tar 's1})
+         (condition "f.coins > 0"))
+
+       :delete ['e ]
+       :create
+       (pattern
+         (edge 'en {:label "is_at" :src 'f :tar 's2})
+         (assign "f.coins=f.coins-1"))})
+```
+
+![cross_empty!](https://raw.githubusercontent.com/jenshweber/grape/master/doc/images/cross_empty!.png)
+
+Indeed, the ferryman needs at least 7 gold coins to carry out his task. In other words, the above transaction will fail with fewer crosses.
 
 ## Syntax checks and static analysis
 Grape implements checks for syntactical ans static semantical correctness and will through exceptions if errors are found during rule definition. For example the following rule is considered incorrect with respect to Grape's syntax definition, as the rule name is a string and not a symbol:
@@ -511,7 +609,6 @@ The exception thrown may look as follows:
 Grape static analysis error: identifier id is used but not declared
 ```
 Note, though, that Grape is schema-less, i.e., there is no need / ability to define a graph schema type for rules. Thus, Grape has no means of checking whether rule definitions are compliant to a particular graph class.
-
 
 
 
