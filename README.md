@@ -213,20 +213,20 @@ Grape supports atomic transactions. Consider the following rule ```let_one_go!``
 ![let_one_go!](https://raw.githubusercontent.com/jenshweber/grape/master/doc/images/let_one_go!.png)
 
 This rule "fires" once employee of a named employer (by deleting the ```works_for``` relationship).
-Now consider the case where you want to define a function that fires _two_ employees. If course, you could simply call ```let_one_go!``` twice. However, if the employer only has one employee left to fire, only one would be let go. In some cases, we may want "all or nothing" semantics (ACID transactions). Grape provides this functionality with the ```transact``` form. Transactions are defined as follows:
+Now consider the case where you want to define a function that fires _two_ employees. If course, you could simply call ```let_one_go!``` twice. However, if the employer only has one employee left to fire, only one would be let go. In some cases, we may want "all or nothing" semantics (ACID transactions). Grape provides this functionality with the ```transact``` and ```apl``` forms. Transactions are defined as follows:
 
 ```clojure
 (transact
-     ['let_one_go! employer]
-     ['let_one_go! employer])
+     (apl 'let_one_go! employer)
+     (apl 'let_one_go! employer))
 ```
-The above form defines a transaction that executes ```let_one_go!``` twice (if possible) or makes no change at all. A transaction is invoked with the _attempt_ function, which returns true if (and only if) the entire transaction succeeds.
+The above form defines a transaction that applies ```let_one_go!``` twice (if possible) or makes no change at all. A transaction is invoked with the _attempt_ function, which returns true if (and only if) the entire transaction succeeds.
 
 ```clojure
 (attempt
    (transact
-     ['let_one_go! employer]
-     ['let_one_go! employer]))
+     (apl 'let_one_go! employer)
+     (apl 'let_one_go! employer)))
 ```
 Of course, transactions can be used to define Clojure operations:
 
@@ -235,8 +235,8 @@ Of course, transactions can be used to define Clojure operations:
   [employer]
   (attempt
    (transact
-     ['let_one_go! employer]
-     ['let_one_go! employer])))
+     (apl 'let_one_go! employer)
+     (apl 'let_one_go! employer))))
 ```
 
 ### Example 11: Backtracking
@@ -280,8 +280,8 @@ Now consider the following transaction ```hire_director!``` that consists of hir
 ```clojure
 (defn hire_director! [employer]
     (transact
-     ['hire! employer]
-     ['promote! employer]))
+     (apl 'hire! employer)
+     ('promote! employer)))
 ```
 
 In general, there will be many possible matches for ```hire!```. However, only those workers can be promoted to Director, which do not also work for a different employer. Therefore, transaction ```hire_director!``` may need to backtrack in order to search for a worker that can be promoted. For example, consider the following job market that has four workers and four employers:
@@ -306,7 +306,43 @@ In general, there will be many possible matches for ```hire!```. However, only t
 
 Attempting to hire a Director for employer "Jens" ```(attempt (hire_director! "Jens"))``` may attempt to hire any of the workers but only succeed with promoting worker ```w4```, as all other workers also work for other employers. Grape will find this only possible match by using backtracking.
 
-### Example 12: Control structures: ```Until```
+### Example 12: Passing values from one rule application to another with ```bind``` and ```consult```
+
+At times we may want to pass values from one rule application context to another. This can be done in Grape transactions using the ```bind``` and ```consult``` forms. Consider the same starting graph as in the previous example.  Now consider the following rules ```hire-someone!``` and ```train!```.
+
+```clojure
+(rule 'hire-someone! ['name]
+      {:read (pattern
+              (node 'm {:label "Employer" :asserts {:name "'&name'"}})
+              (node 'w {:label "Worker"}))
+       :create (pattern
+                (edge 'e {:label "works_for" :src 'w :tar 'm}))})
+```
+![hire-someone!](https://raw.githubusercontent.com/jenshweber/grape/master/doc/images/hire-someone!.png)
+
+```clojure
+(rule 'train! ['name 'w]
+      {:read (pattern
+              (node 'm {:label "Employer" :asserts {:name "'&name'"}})
+              (node 'w {:label "Worker"}))
+       :create (pattern
+                (edge 'f {:label "in_training" :src 'm :tar 'w})
+                )})
+```
+![train!](https://raw.githubusercontent.com/jenshweber/grape/master/doc/images/train!.png)
+
+Note that the second rule (```train!```) receives the worker node ```w``` as a parameter. Let's now define a transaction that first hires someone and then "trains" that worker. That transaction must first apply the ```hire-someone!``` rule and then pass the hired worker (node) as a parameter to the ```train!``` rule. This can be done using ```bind``` and ```consult```. ```bind``` binds a node that was matched in a successfully applied rule to a given name and ```consult``` uses the value bound to a given name as a parameter for another rule application. Here is the transaction:
+
+```clojure
+
+(defn hire_and_train! [employer]
+    (transact
+      (apl 'hire-someone! employer)
+      (bind 'new-hire 'w)
+      (apl 'train! employer (consult 'new-hire))))
+```
+
+### Example 13: Control structures: ```Until```
 
 Sometimes we may need additional control structures in transactions. For example, consider the following graph setup:
 
@@ -361,12 +397,12 @@ Now let's assume that we want a transaction that repeatedly deletes ```likes``` 
 This can be accomplished by using the Grape ```until``` control structure. The first argument of an ``until`` function is the _completion condition_ (which must be side-effect free). Then then one or several Grape rules (or other control structures) can be called. Here is the program for the above example:
 
 ```clojure
-(attempt (until 'chain_of_likes? ['dislike_one]))
+(attempt (until 'chain_of_likes? (apl 'dislike_one)))
 ```
 
 Similar to loops in other programming languages, ```until``` control structures may not necessarily terminate. Of course, the above example program quite clearly terminates, as each iteration removes a ```likes``` edge from the graph - and the number of these edges is finite. However, in general, transactions that use ```until``` may loop forever. 
 
-### Example 13: Control structures: ```Choice```
+### Example 14: Control structures: ```Choice```
 
 Sometimes we may want to try different rule applications non-deterministically. The ```choice``` constrol structure can be used for this. Consider the following two rules:
 
@@ -410,9 +446,9 @@ The following program will non-deterministically choose one of the two above rul
 
 ```clojure
 (attempt
-  (choice ['KimLikesJohn!]
-          ['JohnLikesKim!])
-  ['likeEachOther?])
+  (choice (apl 'KimLikesJohn!)
+          (apl 'JohnLikesKim!))
+  (apl 'likeEachOther?))
 ```
 The graph test ```likeEachOther? ``` is defined as:
 
@@ -427,7 +463,7 @@ The graph test ```likeEachOther? ``` is defined as:
 ```
 ![likeEachOther?](https://raw.githubusercontent.com/jenshweber/grape/master/doc/images/likeEachOther%3F.png)
 
-### Example 14: Control structures: ```Avoid```
+### Example 15: Control structures: ```Avoid```
 Sometimes we may want to specify a condition to avoid in a transaction. To some degree, this can be achieved by using Negative Application Conditions (NACs) attached to rules (see above). However, the expressiveness of NACs is limited. Therefore, Grape provides the ```avoid``` control structure. 
 
 Consider the following start graph
@@ -464,8 +500,8 @@ and the following rule that creates a ```relates``` relationship between an arbi
 The following Grape program tries out all possible (4) matches for ```relate-one!``` so that graph test ```double?``` fails (i.e., is avoided). 
 
 ```clojure
-(attempt (transact ['relate-one!] 
-                   (avoid ['double?])))
+(attempt (transact (apl 'relate-one!) 
+                   (avoid (apl 'double?))))
 ```
 
 Graph test ```double?``` is defined below:
@@ -481,15 +517,15 @@ Graph test ```double?``` is defined below:
 ```
 ![double?](https://raw.githubusercontent.com/jenshweber/grape/master/doc/images/double%3F.png)
 
-### Example 15: Attribute conditions and assignments - The Ferryman example
-We already saw how simple equality conditions on node and edge attributes can be expressed. For more complex conditions on attributes (for example inequalities), Grape provides a special ```condition``` form in the read part of rules. Moreover, Grape provides an ```assign``` form in the create part of rules to revise attribute values of machted graph elements. These two concepts are exemplified with the popular Ferryman problem. Consider a ferryman who is tasked to ship a goat, a cabbage and a wolf from one side of the river to the other side. The ferryman can only ship one thing at a time. Moreover, if left unsupervised, the wolf will eat the goat and the goat will eat the cabbage, respectively. The Ferryman problem is to find a sequence of actions to safely ship all three items to the other side. In Grape it can be described in the following transaction:
+### Example 16: Attribute conditions and assignments - The Ferryman example
+We already saw how simple equality conditions on node and edge attributes can be expressed. For more complex conditions on attributes (for example inequalities), Grape provides a special ```condition``` form in the read part of rules. Moreover, Grape provides an ```assign``` form in the create part of rules to revise attribute values of machted graph elements. These two concepts are exemplified with the popular Ferryman problem. Consider a ferryman who is tasked to ship a goat, a grape and a wolf from one side of the river to the other side. The ferryman can only ship one thing at a time. Moreover, if left unsupervised, the wolf will eat the goat and the goat will eat the grape, respectively. The Ferryman problem is to find a sequence of actions to safely ship all three items to the other side. In Grape it can be described in the following transaction:
 
 ```clojure
   (until 'all_on_the_other_side?
-         (transact (choice ['ferry_one_over!]
-                           ['cross_empty!])
-                   (avoid ['wolf-can-eat-goat?]
-                          ['goat-can-eat-cabbage?])))
+         (transact (choice (apl 'ferry_one_over!)
+                           (apl 'cross_empty!))
+                   (avoid (apl 'wolf-can-eat-goat?)
+                          (apl 'goat-can-eat-grape?))))
 ```
 
 The start graph for the problem is shown here:
@@ -499,7 +535,7 @@ The start graph for the problem is shown here:
       {:create
        (pattern
          (node 'tg {:label "Thing" :asserts {:kind "'Goat'"}})
-         (node 'tc {:label "Thing" :asserts {:kind "'Cabbage'"}})
+         (node 'tc {:label "Thing" :asserts {:kind "'Grape'"}})
          (node 'tw {:label "Thing" :asserts {:kind "'Wolf'"}})
          (node 's1 {:label "Side" :asserts {:name "'This side'"}})
          (node 's2 {:label "Side" :asserts {:name "'Other side'"}})
@@ -519,7 +555,7 @@ The start graph for the problem is shown here:
       {:read
        (pattern :homo
                 (node 'tg {:label "Thing" :asserts {:kind "'Goat'"}})
-                (node 'tc {:label "Thing" :asserts {:kind "'Cabbage'"}})
+                (node 'tc {:label "Thing" :asserts {:kind "'Grape'"}})
                 (node 'tw {:label "Thing" :asserts {:kind "'Wolf'"}})
                 (node 's2 {:label "Side" :asserts {:name "'Other side'"}})
                 (edge 'e1 {:label "is_at" :src 'tg :tar 's2})
@@ -530,7 +566,7 @@ The start graph for the problem is shown here:
 
 The two graph tests specifying the dangerous conditions to avoid are:
 
-![goat-can-eat-cabbage?](https://raw.githubusercontent.com/jenshweber/grape/master/doc/images/goat-can-eat-cabbage%3F.png)
+![goat-can-eat-grape?](https://raw.githubusercontent.com/jenshweber/grape/master/doc/images/goat-can-eat-grape%3F.png)
 
 ![wolf-can-eat-goat?](https://raw.githubusercontent.com/jenshweber/grape/master/doc/images/wolf-can-eat-goat%3F.png)
 
