@@ -2,11 +2,11 @@
 
 (gts 'ferryman)
 
-(rule 'setup!
+(rule 'setup-ferryman!
       {:create
        (pattern
          (node 'tg {:label "Thing" :asserts {:kind "'Goat'"}})
-         (node 'tc {:label "Thing" :asserts {:kind "'Cabbage'"}})
+         (node 'tc {:label "Thing" :asserts {:kind "'Grape'"}})
          (node 'tw {:label "Thing" :asserts {:kind "'Wolf'"}})
          (node 's1 {:label "Side" :asserts {:name "'This side'"}})
          (node 's2 {:label "Side" :asserts {:name "'Other side'"}})
@@ -65,11 +65,11 @@
                   (node 'f {:label "Ferry"})
                   (edge 'ef {:label "is_at" :src 'f :tar 's})))})
 
-(rule 'goat-can-eat-cabbage?
+(rule 'goat-can-eat-grape?
       {:read
        (pattern :homo
                 (node 't1 {:label "Thing" :asserts {:kind "'Goat'"}})
-                (node 't2 {:label "Thing" :asserts {:kind "'Cabbage'"}})
+                (node 't2 {:label "Thing" :asserts {:kind "'Grape'"}})
                 (node 's {:label "Side"})
                 (edge 'e1 {:label "is_at" :src 't1 :tar 's})
                 (edge 'e2 {:label "is_at" :src 't2 :tar 's})
@@ -81,7 +81,7 @@
       {:read
        (pattern :homo
                 (node 'tg {:label "Thing" :asserts {:kind "'Goat'"}})
-                (node 'tc {:label "Thing" :asserts {:kind "'Cabbage'"}})
+                (node 'tc {:label "Thing" :asserts {:kind "'Grape'"}})
                 (node 'tw {:label "Thing" :asserts {:kind "'Wolf'"}})
                 (node 's2 {:label "Side" :asserts {:name "'Other side'"}})
                 (edge 'e1 {:label "is_at" :src 'tg :tar 's2})
@@ -90,24 +90,20 @@
 
 
 
-(defn solve_puzzel! []
+(defn solve_problem! []
   (until 'all_on_the_other_side?
-         (transact (choice ['ferry_one_over!]
-                           ['cross_empty!])
-                   (avoid ['wolf-can-eat-goat?]
-                          ['goat-can-eat-cabbage?]))))
+         (transact (choice (apl 'ferry_one_over!)
+                           (apl 'cross_empty!))
+                   (avoid (apl 'wolf-can-eat-goat?)
+                          (apl 'goat-can-eat-grape?)))))
 
 
-(rule 'delete-any-node!
-      {:read (pattern (node 'n))
-       :delete ['n]})
+(clear!)
+
+(apl 'ferry_one_over!)
 
 
-(defn clear [] (while (delete-any-node!)))
-
-(clear)
-
-(setup!)
+(setup-ferryman!)
 
 
-(attempt (solve_puzzel!))
+(attempt (solve_problem!))

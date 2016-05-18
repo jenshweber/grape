@@ -14,11 +14,11 @@
     [grape.tx-cypher :refer :all]
     [environ.core :refer [env]]
     [taoensso.timbre :as timbre
-      :refer (log  trace  debug  info  warn  error  fatal  report
-              logf tracef debugf infof warnf errorf fatalf reportf
-              spy get-env log-env)]
+     :refer (log  trace  debug  info  warn  error  fatal  report
+                  logf tracef debugf infof warnf errorf fatalf reportf
+                  spy get-env log-env)]
     [taoensso.timbre.profiling :as profiling
-      :refer (pspy pspy* profile defnp p p*)]
+     :refer (pspy pspy* profile defnp p p*)]
     ))
 
 ; ---------------------------------------------------
@@ -44,6 +44,13 @@
   {:nodes (select-keys x nids)
    :edges  (select-keys x eids)})
 
+(defn tabelize [res]
+  (let [res2 (first (second res))
+        cols (:columns res2)
+        rows (map (fn [x] (:row x)) (:data res2))
+        tab (cy/tableize cols rows )]
+    tab))
+
 (defnp dbquery [q p]
   (let [;_ (println "DBQuery: " q)
         res (nt/execute conn (eval 'tx) [(nt/statement q)])
@@ -51,12 +58,34 @@
         eids (map name (map get-id (filter-elem 'edge els)))
         nids (map name (map get-id (filter-elem 'node els )))]
     (intern *ns* 'tx (first res))
-    (let [res2 (first (second res))
-          cols (:columns res2)
-          rows (map (fn [x] (:row x)) (:data res2))
-          tab (cy/tableize cols rows )
+    (let [tab (tabelize res)
           ret (map (fn [x] (sort-graph-elms x nids eids)) tab)]
+      (intern *ns* '_ret (merge (eval '_ret) (first tab)))
       ret)))
+
+(defn return-id [l]
+  ((eval '_ret) (name l)))
+
+(defn return-node [l]
+  (return-id l))
+
+(defn return-edge [l]
+  (return-id l))
+
+(defn return-node-props [par]
+  (let [i (return-id par)
+        _ (begintx)
+        res (nt/execute conn (eval 'tx) [(nt/statement (str "MATCH (n) WHERE ID(n)=" i " RETURN *"))])
+        tab (tabelize res)]
+    (first (vals (first tab)))))
+
+(defn return-edge-props [par]
+  (let [i (return-id par)
+        _ (begintx)
+        res (nt/execute conn (eval 'tx) [(nt/statement (str "MATCH ()-[e]->() WHERE ID(e)=" i " RETURN *"))])
+        tab (tabelize res)]
+    (first (vals (first tab)))))
+
 
 (defnp match [s c m]
   "match a pattern in the host graph. s is a parameterlist, c is an (optional) match context string and m is a pattern"
@@ -76,7 +105,7 @@
           con (redex->cypher m)
           [_ nacid p] nac
           ext (pattern->cypher s :match p m)
-            ;_ (print ".       [Trying NAC " nacid "]: " con "  ||  " ext )
+          ;_ (print ".       [Trying NAC " nacid "]: " con "  ||  " ext )
           ]
       (let [res (dbquery (str con " " ext) s)
             ; _ (println " [" (not (empty? res)) "]")
@@ -105,24 +134,35 @@
 
 
 (defn swap [mps e]
-    (concat (take (dec (count mps)) mps) (list (assoc (last mps) :btp e))))
+  (concat (take (dec (count mps)) mps) (list (assoc (last mps) :btp e))))
+
+
+(defn resolve-consults [params]
+  (map (fn [p] (if (and (vector? p) (= '__consult (first p)))
+                 ((eval '_bindings) (second p))
+                 p))
+       params))
 
 (defnp run-transaction [steps mps ctr]
   (if (empty? steps)
     [true mps  ctr]
     (let [;_ (println "working on " mps)
            [n & aparams] (first steps)
-          ;_ (if (< (inc ctr) (count mps))
-          ;    (println "Redoing: " n "with aparams " aparams  )
-          ;    (println "Current step: " n "with aparams " aparams  ))
-          ctr (inc ctr)
-          new (= (count mps) ctr)
-          mps (if new
-                (concat mps (list {:name n :btp 0 :max 0}))
-                mps)
-          btp (:btp (nth mps ctr))]
+           ;_ (if (< (inc ctr) (count mps))
+           ;    (println "Redoing: " n "with aparams " aparams  )
+           ;    (println "Current step: " n "with aparams " aparams  ))
+           ctr (inc ctr)
+           new (= (count mps) ctr)
+           mps (if new
+                 (concat mps (list {:name n :btp 0 :max 0}))
+                 mps)
+           btp (:btp (nth mps ctr))]
+
 
       (cond (= '__until n)
+            ;;
+            ;; UNTIL
+            ;;
             (do ;(println "UNTIL")
               (cond (zero? btp) (let [;_ (print "      testing until condition: ")
                                        [res m c] (run-transaction (list (first aparams)) '() -1)
@@ -144,7 +184,9 @@
                                          (concat (take (dec (count mps)) mps) (list {:name '__choice :btp 0 :max (dec (count aparams))} ))
                                          mps)]
                               (run-transaction (concat (list (nth aparams btp)) (rest steps)) mps ctr))
-
+            ;;
+            ;; AVOID
+            ;;
             (= '__avoid n) (let [;_ (println "AVOID")
                                   res (if new
                                         (reduce (fn [agg n]
@@ -158,18 +200,33 @@
                                [false mps ctr]
                                (run-transaction (rest steps) mps ctr)))
 
+            ;;
+            ;; TRANSACT
+            ;;
+
             (= '__transact n) (let [;_ (println "TRANSACT, now continuing with " (first aparams))
-                                    [res n-mps n-ctr] (run-transaction (first aparams) mps ctr )]
+                                     [res n-mps n-ctr] (run-transaction (first aparams) mps ctr )]
                                 (if (true? res)
                                   (let [mps2 (if (> (count n-mps) (count mps)) n-mps mps)]
                                     (run-transaction (rest steps) mps2 n-ctr))
                                   [res n-mps n-ctr]))
+            ;;
+            ;; BIND
+            ;;
+            (= '__bind n) (let [k (first aparams)
+                                v (return-id (second aparams))]
+                            (intern *ns* '_bindings (assoc (eval '_bindings) k v))
+
+                            (if new
+                              (run-transaction (rest steps) (concat mps (list {:name n :btp 0 :max 0})) ctr)
+                              (run-transaction (rest steps) mps ctr)))
 
             :else
 
             (let [;_ (println "RULE")
-                  r ((:rules (eval 'gragra)) n)
-                  fparams (:params r)]
+                   r ((:rules (eval 'gragra)) n)
+                   fparams (:params r)
+                   aparams (resolve-consults aparams)]
               (when (nil? r)
                 (throw (Exception. (str "rule '" n "' does not exist \n"))))
               (when (not (= (count fparams) (count aparams)))
@@ -244,8 +301,10 @@
 (defnp transact-iter
   [steps mps iter]
   (begintx)
+  (intern *ns* '_ret {})
   (let [_ (println "Transact-iteration: " iter)
         ;_ (println "mps: " (map (fn [s] [(:name s) (:btp s) (:max s)]) mps))
+        ;_ (Thread/sleep 500)
         [res r-mps ctr] (run-transaction steps mps -1)]
     (if (true? res)
       (do
@@ -290,14 +349,8 @@
 (defn avoid [& steps]
   ['__avoid steps])
 
-
-(defn gts [n]
-  (let [check-syntax (partial check-syntax-generic
-                              (str "GTS    :- (gts ID ) \n"
-                                   "ID     :- *symbol* \n"
-                                   ))]
-    (check-syntax (symbol? n) "gts ID should be a symbol."))
-  (intern *ns* 'gragra {:_graph_name n :rules {}}))
+(defn apl [r & pars]
+  (vec (concat [r] pars)))
 
 
 (defn node
@@ -359,6 +412,17 @@
 (defn assign [s]
   ['assign s])
 
+(defn bind
+  "Binds a value from a rule application (e) to a name (n)"
+  [n e]
+    ['__bind n e])
+
+(defn consult [n]
+  "resolves value bound to a given name (n)"
+  ['__consult n])
+
+
+
 (defn NAC
   "DSL form for specifying Negatic Applications Conditions (NACs)"
   [& xs]
@@ -400,3 +464,18 @@
        ((intern *ns* (symbol (str (name n) "-show")) (fn [] (dot->image (rule->dot n))))))))
   ([n prop]
    (rule n [] prop)))
+
+
+(defn gts [n]
+  (let [check-syntax (partial check-syntax-generic
+                              (str "GTS    :- (gts ID ) \n"
+                                   "ID     :- *symbol* \n"
+                                   ))]
+    (check-syntax (symbol? n) "gts ID should be a symbol."))
+  (intern *ns* 'gragra {:_graph_name n :rules {}})
+  (intern *ns* '_ret)
+  (intern *ns* '_bindings {})
+  (rule 'delete-any-node!
+      {:read (pattern (node 'n))
+       :delete ['n]})
+  (intern *ns* 'clear! (fn [] (while ((eval 'delete-any-node!))))))

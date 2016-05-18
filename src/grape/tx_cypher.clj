@@ -31,14 +31,15 @@
 
 (defn node->cypher [s m n]
   (let [c (second n)
-        k (if (= m :match) " MATCH" " CREATE")]
-    (str k " (" (:id c)
+        k (if (= m :match) " MATCH" " CREATE")
+        nid (:id c)]
+    (str k " (" nid
          (let [l (:label c)]
            (if (nil? l)
              (graphlabel)
              (str  ":" (resolve-value s l) (graphlabel))))
          (asserts->cypher s (:asserts c))
-         ")"
+         ") "
          )))
 
 (defn edge->cypher [s m e]
@@ -121,15 +122,23 @@
         (if (= m :match)
           (str
             " WHERE "
+            ; add isomorphism condition
             (if (= :iso sem)
               (let [st (gen-constraint-isomorphism (concat nids ex_nids) (concat eids ex_eids))]
                 (if (empty? st)
                   ""
                   (str st " AND ")))
               "")
+            ; add custom conditions
             (if (empty? c)
               "1=1"
-              (second (first c)))))
+              (second (first c)))
+            ; add graph element id's that have been passed as parameters
+
+            (reduce (partial str-sep " AND ")
+                    ""
+                    (map (fn [i] (str "ID(" i ")=" (scope i)))
+                         (filter (fn [i] (not (nil? (scope i)))) (concat eids nids))))))
 
          (if (empty? a)
            ""
