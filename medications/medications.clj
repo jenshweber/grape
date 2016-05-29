@@ -34,7 +34,7 @@
        :create (pattern
                  (node 'tf2 {:asserts {:frame "'&frame'" :frequency "'&freq'" :kind "'TimeFrame'"}})
                  (edge 'e {:label "timeframe" :src 'i1 :tar 'tf2})
-                 (assign "i1.duration='&duration'")
+                 (assign "i1.duration=&duration")
                )
       }
 )
