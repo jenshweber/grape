@@ -16,7 +16,7 @@
   (let [[m par] (re-find #"(?:&)(\w+)" s)]
     (if (nil? par)
       s
-      (resolve-value scope (clojure.string/replace s m (scope (symbol par)))))))
+      (resolve-value scope (clojure.string/replace s m (str (scope (symbol par))))))))
 
 (re-find #"(?:&)(\w+)" "hello &par")
 
@@ -103,8 +103,74 @@
     (reduce (fn [s id] (str s ", " (name id))) "" ids)))
 
 
+
+
 (defn pattern->cypher
-  "translate a graph pattern to cypher matching query"
+  "translate a read graph pattern to cypher matching query"
+  ([scope m p excluded]
+   (let [s (second p)
+         els (:els s)
+         sem (:sem s)
+         c (filter-elem 'cond els)
+         a (filter-elem 'assign els)
+         eids (map get-id (filter-elem 'edge els))
+         nids (map get-id (filter-elem 'node els ))]
+     (if (nil? els)
+       ""
+       (str
+        (reduce (partial str-sep " ") (map (partial graphelem->cypher scope m) els))
+        (if (= m :match)
+          (let [ex_eids (keys (:edges excluded))
+                ex_nids (keys (:nodes excluded))]
+            (str
+              " WHERE "
+              ; add isomorphism condition
+              (if (= :iso sem)
+                (let [st (gen-constraint-isomorphism (concat nids ex_nids) (concat eids ex_eids))]
+                  (if (empty? st)
+                    ""
+                    (str st " AND ")))
+                "")
+              ; add custom conditions
+              (if (empty? c)
+                "1=1"
+                (second (first c)))
+              ; add graph element id's that have been passed as parameters
+
+              (reduce (partial str-sep " AND ")
+                      ""
+                      (map (fn [i] (str "ID(" i ")=" (scope i)))
+                           (filter (fn [i] (not (nil? (scope i)))) (concat eids nids))))
+
+              (let [rstr (str (ids->return nids) (ids->return eids))
+                    ostr (str (ids->order nids) (ids->order eids))]
+                (str " RETURN " (.substring rstr 1 (count rstr) )
+                     " ORDER BY " (.substring ostr 1 (count ostr) )))))
+
+          ; else (= m :create)
+          (let [els2 (:els (second excluded))
+                ex_eids (map get-id (filter-elem 'edge els2))
+                ex_nids (map get-id (filter-elem 'node els2 ))
+                ;_ (println "CREATE CALLED " excluded " *** " ex_nids)
+                ]
+            (str
+              (if (empty? a)
+                ""
+                (let [rstr (reduce (partial str-sep ", ")
+                                   ""
+                                   (map (fn [i] (resolve-value scope (second i))) a))]
+                  (str " SET " (.substring rstr 1 (count rstr) ))))
+
+              (let [rstr (str (ids->return nids) (ids->return eids) (ids->return ex_nids) (ids->return ex_eids))]
+                (if (= 0 (count rstr))
+                  " RETURN * "
+                  (str " RETURN " (.substring rstr 1 (count rstr) )))))))))))
+  ([scope m p]
+   (pattern->cypher scope m p {:nodes '{} :edges '{}})))
+
+
+(defn savepattern->cypher
+  "translate a read graph pattern to cypher matching query"
   ([scope m p excluded]
    (let [s (second p)
          els (:els s)
@@ -138,24 +204,25 @@
             (reduce (partial str-sep " AND ")
                     ""
                     (map (fn [i] (str "ID(" i ")=" (scope i)))
-                         (filter (fn [i] (not (nil? (scope i)))) (concat eids nids))))))
+                         (filter (fn [i] (not (nil? (scope i)))) (concat eids nids))))
 
-         (if (empty? a)
-           ""
-           (str " SET " (second (first a))))
-         " RETURN "
-         (let [rstr (str (ids->return nids) (ids->return eids))]
-           (if (= 0 (count rstr))
-             ""
-             (.substring rstr 1 (count rstr) )))
-         " ORDER BY "
-         (let [rstr (str (ids->order nids) (ids->order eids))]
-           (if (= 0 (count rstr))
-             ""
-             (.substring rstr 1 (count rstr) )))))))
+            (let [rstr (str (ids->return nids) (ids->return eids))
+                  ostr (str (ids->order nids) (ids->order eids))]
+              (str " RETURN " (.substring rstr 1 (count rstr) )
+                   " ORDER BY " (.substring ostr 1 (count ostr) ))))
+
+          ; else (= m :create)
+          (str
+            (if (empty? a)
+              ""
+              (str " SET " (resolve-value scope (second (first a)))))
+
+            (let [rstr (str (ids->return nids) (ids->return eids))]
+              (if (= 0 (count rstr))
+                " RETURN * "
+                (str " RETURN " (.substring rstr 1 (count rstr) ))))))))))
   ([scope m p]
    (pattern->cypher scope m p {:nodes '{} :edges '{}})))
-
 
 
 (defn redex->cypher [r]
