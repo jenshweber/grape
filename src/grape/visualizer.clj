@@ -9,6 +9,12 @@
    [grape.util :refer :all]
    ))
 
+(defn reset-ctr! []
+  (intern *ns* '_ctr 0))
+
+(defn get-ctr! []
+  (intern *ns* '_ctr (inc (eval '_ctr)))
+  (eval '_ctr))
 
 (defn dot->render [g]
   (dorothy/render g {:format :png}))
@@ -68,12 +74,16 @@
 (defn cond->dot
   "translate a condition to dot"
   [c]
-  (str " cond [color=lightgrey style=filled shape=house label=\"" (second c) "\"]"))
+  (str " "
+       (get-ctr!)
+       " cond [color=lightgrey style=filled shape=house label=\"" (second c) "\"]"))
 
 (defn assign->dot
   "translate an assignment to dot"
   [c]
-  (str " ass [color=seagreen1 style=filled shape=invhouse label=\"" (second c) "\"]"))
+  (str " "
+       (get-ctr!)
+       " [color=seagreen1 style=filled shape=invhouse label=\"" (second c) "\"]"))
 
 
 (defn graphelem->dot [d c1 c2 o e]
@@ -103,6 +113,7 @@
 
 (defn rule->dot [rid]
   "translate a rule to dot"
+  (reset-ctr!)
   (let [n (name rid)
         rule ((:rules (eval 'gragra)) rid)
         r (:read rule)

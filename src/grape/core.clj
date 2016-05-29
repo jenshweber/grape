@@ -51,17 +51,24 @@
         tab (cy/tableize cols rows )]
     tab))
 
-(defnp dbquery [q p]
-  (let [;_ (println "DBQuery: " q)
-        res (nt/execute conn (eval 'tx) [(nt/statement q)])
-        els (:els (second p))
-        eids (map name (map get-id (filter-elem 'edge els)))
-        nids (map name (map get-id (filter-elem 'node els )))]
-    (intern *ns* 'tx (first res))
-    (let [tab (tabelize res)
-          ret (map (fn [x] (sort-graph-elms x nids eids)) tab)]
-      (intern *ns* '_ret (merge (eval '_ret) (first tab)))
-      ret)))
+(defnp dbquery
+  ([q p]
+   (let [;_ (println "DBQuery: " q)
+         res (nt/execute conn (eval 'tx) [(nt/statement q)])
+         els (:els (second p))
+         eids (map name (map get-id (filter-elem 'edge els)))
+         nids (map name (map get-id (filter-elem 'node els )))]
+     (intern *ns* 'tx (first res))
+     (let [tab (tabelize res)
+           ret (map (fn [x] (sort-graph-elms x nids eids)) tab)
+;           _ (println "Current bindings: " (eval '_ret))
+;           _ (println "new returns:" (first tab))
+           ]
+       (intern *ns* '_ret (merge (eval '_ret) (first tab) ))
+       ret)))
+  ([q]
+   (dbquery q '())))
+
 
 (defn return-id [l]
   ((eval '_ret) (name l)))
@@ -107,7 +114,7 @@
           ext (pattern->cypher s :match p m)
           ;_ (print ".       [Trying NAC " nacid "]: " con "  ||  " ext )
           ]
-      (let [res (dbquery (str con " " ext) s)
+      (let [res (dbquery (str con " " ext))
             ; _ (println " [" (not (empty? res)) "]")
             ]
         (if (empty? res)
@@ -215,6 +222,7 @@
             ;;
             (= '__bind n) (let [k (first aparams)
                                 v (return-id (second aparams))]
+                           ; (println " binding node id " v)
                             (intern *ns* '_bindings (assoc (eval '_bindings) k v))
 
                             (if new
@@ -265,7 +273,7 @@
                                       (reduce (partial str-sep ", ") (:delete r)))
                                  "")
                                (if (contains? r :create)
-                                 (pattern->cypher s :create (:create r))
+                                 (pattern->cypher s :create (:create r) (:read r))
                                  ""))
                         ;_ (print ".     [attempting to rewrite graph:] ")
                         ]
@@ -274,7 +282,7 @@
                       (when (or (contains? r :create) (contains? r :delete))
                         (do
                           ;(println "MODIFY GRAPH: " s)
-                          (dbquery s '())))
+                          (dbquery s)))
                       ;(println s "\n.        [Success] mps:" mps " ctr:" ctr)
                       (let [m (if (nil? matches) 0 (count matches))
                             mps (if new

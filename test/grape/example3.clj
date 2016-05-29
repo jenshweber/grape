@@ -23,12 +23,12 @@
 
 (rule 'hire-someone! ['name]
       {:read (pattern
-              (node 'm {:label "Employer" :asserts {:name "'&name'"}})
-              (node 'w {:label "Worker"}))
+               (node 'm {:label "Employer" :asserts {:name "'&name'"}})
+               (node 'w {:label "Worker"})
+               (NAC
+                 (edge 'e {:label "works_for" :src 'w :tar 'm})))
        :create (pattern
                 (edge 'e {:label "works_for" :src 'w :tar 'm}))})
-(use 'grape.visualizer)
-(document-rule 'train!)
 
 (rule 'train! ['name 'w]
       {:read (pattern
