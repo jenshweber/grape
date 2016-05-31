@@ -663,6 +663,28 @@ Visual representations can also be saved as image files to the file system by ca
 ```
 Indeed, if Lighttable is used as the IDE, the visual rule representation can be "inlined" within the IDE. This function requires the NerdyPainter plugin.
 
+## Integration with Native Clojure
+
+Grape can be integrated into a native clojure application using the [Leinigen Build Tool](http://leiningen.org/) by: 
+
+0. Install `lein` if required. Avaliable for OSX via homebrew: `brew install leiningen`
+1. Compiling the grape source into a .jar file. Use `lein compile; lein uberjar'
+2. Installing into your local repository. Use `lein install`
+3. Reference Graph in your new project's dependancies, for example: 
+
+```
+:dependencies [[org.clojure/clojure "1.7.0"]
+                 [environ "1.0.2"]
+                 [grape "0.1.0-SNAPSHOT"]]
+  :plugins [[lein-environ "1.0.2"]]
+```
+
+4. Provide an appropriate `profiles.clj` file to designate the Neo4j DB connection. 
+5. Include grape via Clojure's usual namespace application: 
+
+```
+(ns app.core (:require [grape.core :refer :all]))
+```
 
 Copyright © 2016 Jens Weber
 
