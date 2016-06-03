@@ -473,8 +473,17 @@
   ([n prop]
    (rule n [] prop)))
 
+(defn loadRules [module] 
+    (try 
+        (let [] 
+            (println (str "Attempting to load: " module)) 
+            (load-file module)
+        )(catch Exception e (println (str "failed to load: " module)))
 
-(defn gts [n]
+    )
+)
+
+(defn inner_gts [n]
   (let [check-syntax (partial check-syntax-generic
                               (str "GTS    :- (gts ID ) \n"
                                    "ID     :- *symbol* \n"
@@ -486,4 +495,18 @@
   (rule 'delete-any-node!
       {:read (pattern (node 'n))
        :delete ['n]})
-  (intern *ns* 'clear! (fn [] (while ((eval 'delete-any-node!))))))
+  ;(loadRules modules)     
+  (intern *ns* 'clear! (fn [] (while ((eval 'delete-any-node!)))))
+  (println "end of inner_gts")
+)
+
+(defn gts "Makes a new GTS system" 
+    ([n] (let [] (println "[n]") (inner_gts n)))
+    ([n modules] (let [] 
+            (println (str "[n modules] -> " modules) ) 
+            (println modules) 
+            (inner_gts n) 
+            (dorun (map loadRules modules))
+     ))
+)
+
