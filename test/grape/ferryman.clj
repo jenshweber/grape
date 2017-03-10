@@ -26,7 +26,8 @@
          (node 't {:label "Thing"})
          (edge 'et {:label "is_at" :src 't :tar 's1})
          (edge 'e {:label "is_at" :src 'f :tar 's1})
-         (condition "f.coins > 0"))
+         (condition "f.coins > 0")
+         )
        :delete ['e 'et]
        :create
        (pattern
@@ -36,6 +37,7 @@
        })
 
 
+(ferry_one_over!)
 
 (rule 'cross_empty!
       {:read
@@ -100,7 +102,6 @@
 
 (clear!)
 
-(apl 'ferry_one_over!)
 
 
 (setup-ferryman!)

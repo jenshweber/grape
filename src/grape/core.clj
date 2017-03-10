@@ -53,7 +53,7 @@
 
 (defnp dbquery
   ([q p]
-   (let [;_ (println "DBQuery: " q)
+   (let [; _ (println "DBQuery: " q)
          res (nt/execute conn (eval 'tx) [(nt/statement q)])
          els (:els (second p))
          eids (map name (map get-id (filter-elem 'edge els)))

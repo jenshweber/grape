@@ -75,7 +75,7 @@
   "translate a condition to dot"
   [c]
   (str " "
-       (get-ctr!)
+       ;(get-ctr!)
        " cond [color=lightgrey style=filled shape=house label=\"" (second c) "\"]"))
 
 (defn assign->dot
@@ -132,4 +132,6 @@
 
 (defn document-rules []
   (map document-rule (keys (:rules (intern *ns* 'gragra)))))
+
+
 

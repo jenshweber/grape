@@ -37,7 +37,7 @@
          (let [l (:label c)]
            (if (nil? l)
              (graphlabel)
-             (str  ":" (resolve-value s l) (graphlabel))))
+             (str  (graphlabel) ":" (resolve-value s l))))
          (asserts->cypher s (:asserts c))
          ") "
          )))
