@@ -1,6 +1,6 @@
-(defproject grape "0.1.0-SNAPSHOT"
+(defproject leadlab/grape "0.1.0-SNAPSHOT"
   :description "Graph Rewriting And Persistence Engine"
-  :url "http://example.com/FIXME"
+  :url "http://jenshweber.github.io/grape/"
   :license {:name "Eclipse Public License"
             :url "http://www.eclipse.org/legal/epl-v10.html"}
   :dependencies [[org.clojure/clojure "1.7.0"]

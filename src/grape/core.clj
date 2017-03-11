@@ -53,7 +53,7 @@
 
 (defnp dbquery
   ([q p]
-   (let [; _ (println "DBQuery: " q)
+   (let [_ (println "DBQuery: " q)
          res (nt/execute conn (eval 'tx) [(nt/statement q)])
          els (:els (second p))
          eids (map name (map get-id (filter-elem 'edge els)))
@@ -100,8 +100,10 @@
     '()
     (let [q (str c " "(pattern->cypher s :match m))
           ;          _ (print q)
-          m (dbquery q m)
-          ;          _ (println "\nRESULT " m)
+          m (if (str/blank? q)
+              true
+              (dbquery q m))
+              ;          _ (println "\nRESULT " m)
           ]
       m)))
 
@@ -125,11 +127,16 @@
   (not (empty? (:rules (eval 'gragra) n))))
 
 (defnp check [ms s nacs]
+  "check nacs in context of prior matches"
   (remove (fn [x] (nil? x))
           (map (fn [m] (if (match-nacs m s nacs)
                          nil
                          m))
                ms)))
+
+(defnp check-only [s nacs]
+  "check nacs in context of no readers"
+  (match-nacs '() s nacs))
 
 
 (defnp drop-n [coll n]
@@ -251,18 +258,25 @@
                                      cm (match s "" reader)
                                      ;  _ (println ".       [matches found before NACs check: " (count cm) "]")
                                      nacs (filter (fn [x] (= 'NAC (first x))) (:els (second reader)))
-                                     mc (check cm s nacs)
+
+                                     mc (if (true? cm) ; empty reader
+                                          (if (check-only s nacs)
+                                            '()
+                                            true)
+                                          (check cm s nacs))
                                      ;  _ (println ".         [matches remaining after NACs check: " (count mc) "]" )
-                                     mt (drop-n mc btp)
+                                     mt (if (true? mc)
+                                          true
+                                          (drop-n mc btp))
                                      ;_ (println ".           [matches remaining after backtracking point (" btp "):" (count mt) "]")])
                                      ]
                                 mt))]
 
-                (if (and (not (nil? matches)) (zero? (count matches)))
+                (if (and (not (nil? matches)) (not (true? matches))(zero? (count matches)))
                   (do
                     ;(println ".        [Failure] " [false mps ctr])
                     [false mps ctr])
-                  (let [redex (if (nil? matches)
+                  (let [redex (if (or (nil? matches) (true? matches))
                                 ""
                                 (redex->cypher (first matches)))
                         s (str redex
@@ -284,7 +298,7 @@
                           ;(println "MODIFY GRAPH: " s)
                           (dbquery s)))
                       ;(println s "\n.        [Success] mps:" mps " ctr:" ctr)
-                      (let [m (if (nil? matches) 0 (count matches))
+                      (let [m (if (or (nil? matches) (true? matches)) 0 (count matches))
                             mps (if new
                                   (concat (take (dec (count mps)) mps) (list {:name n :btp 0 :max (dec m)}))
                                   mps)]

@@ -106,7 +106,11 @@
 
 
 (defn pattern->cypher
-  "translate a read graph pattern to cypher matching query"
+  "translate a read graph pattern to cypher matching query.
+  1) scope: provides the actual parameterlist
+  2) m: can be :match or :create
+  3) p: is the actual pattern
+  4) excluded: list of nodes and edges that are excluded from the match"
   ([scope m p excluded]
    (let [s (second p)
          els (:els s)
@@ -114,8 +118,10 @@
          c (filter-elem 'cond els)
          a (filter-elem 'assign els)
          eids (map get-id (filter-elem 'edge els))
-         nids (map get-id (filter-elem 'node els ))]
-     (if (nil? els)
+         nids (map get-id (filter-elem 'node els ))
+         ;_ (println "scope:" scope "   m:" m "   p:" p "    excluded:" excluded "    nids:" nids)
+         ]
+     (if (or (nil? els) (and (empty? nids) (empty? eids)))
        ""
        (str
         (reduce (partial str-sep " ") (map (partial graphelem->cypher scope m) els))
