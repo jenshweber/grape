@@ -36,8 +36,8 @@
     (str k " (" nid
          (let [l (:label c)]
            (if (nil? l)
-             (graphlabel)
-             (str  (graphlabel) ":" (resolve-value s l))))
+             ""
+             (str ":" (resolve-value s l))))
          (asserts->cypher s (:asserts c))
          ") "
          )))
@@ -48,7 +48,7 @@
     (str k " (" (:src c) ")-[" (:id c)
          (let [l (:label c)]
            (if (nil? l)
-             (graphlabel)
+             ""
              (str ":" (resolve-value s l))))
          (asserts->cypher s (:ass c))
          "]->(" (:tar c) ")")))
