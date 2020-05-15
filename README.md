@@ -32,7 +32,7 @@ A Clojure library designed to provide support for graph rewriting based on a per
   :profiles {:dev {}}
   :repl-options {:init-ns grapetest.core})
 ```
-
+* **Start it up** Make sure the Neo4j database is running. Start a Gorilla REPL with `lein gorilla`. Open the indicated work sheet. Enter `(use 'grape.core)` to import the Grape and connect to Neo4J. (This may take a few seconds. If you are getting an exception, your database is not running or something is wrong with the connection details.)
 
 ## Usage
 Import the Grape library.
