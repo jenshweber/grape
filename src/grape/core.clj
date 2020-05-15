@@ -53,7 +53,8 @@
 
 (defnp dbquery
   ([q p]
-   (let [_ (println "DBQuery: " q)
+   (let [
+         ;_ (println "DBQuery: " q)
          res (nt/execute conn (eval 'tx) [(nt/statement q)])
          els (:els (second p))
          eids (map name (map get-id (filter-elem 'edge els)))
@@ -324,7 +325,8 @@
   [steps mps iter]
   (begintx)
   (intern *ns* '_ret {})
-  (let [_ (println "Transact-iteration: " iter)
+  (let [
+        ;_ (println "Transact-iteration: " iter)
         ;_ (println "mps: " (map (fn [s] [(:name s) (:btp s) (:max s)]) mps))
         ;_ (Thread/sleep 500)
         [res r-mps ctr] (run-transaction steps mps -1)]
@@ -483,7 +485,8 @@
        (intern *ns* s (fn [& par] (attempt (transact (cons s par) ))))
 
        (intern *ns* (symbol (str (name n) "-dot")) (fn [] (rule->dot n)))
-       ((intern *ns* (symbol (str (name n) "-show")) (fn [] (dot->image (rule->dot n))))))))
+       ((intern *ns* (symbol (str (name n) "-show")) (fn [] (show (rule->dot n)))))
+       )))
   ([n prop]
    (rule n [] prop)))
 
