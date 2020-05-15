@@ -6,9 +6,9 @@ A Clojure library designed to provide support for graph rewriting based on a per
 
 # Quick Start
 
-* Grape requires the graph database Neo4j. The community edition (free) can be downloaded here: https://neo4j.com/download/
-* Create new clojure project with Leiningen ``lein new gapetest``
-* Create a new file ``profiles.clj`` to contain your neo4j connection info:
+* **Install Neo4J** Grape requires the graph database Neo4j. The community edition (free) can be downloaded here: https://neo4j.com/download/
+* **Create Clojure project** For example with Leiningen ``lein new gapetest``
+* **Add profiles.clj** Create a new file ``profiles.clj`` to contain your neo4j connection info:
 
 ```clojure
 {:dev {
@@ -17,7 +17,22 @@ A Clojure library designed to provide support for graph rewriting based on a per
              :db-pw "<your neo4j password>"}}}
 ```
 
-* 
+* **Edit project.clj** Add the `grape` dependency to your project.clj. Add the `lein-environ` plugin, so that Leiningen can source environment variables from your profiles.clj file. If you want to use the browser-based REPL (Gorilla) for developing your graph transformation rules (recommended) also add the `lein-gorilla` plugin. Your project.clj file will look similar to:
+
+```clojure
+(defproject grapetest "0.1.0-SNAPSHOT"
+  :description "FIXME: write description"
+  :url "http://example.com/FIXME"
+  :license {:name "EPL-2.0 OR GPL-2.0-or-later WITH Classpath-exception-2.0"
+            :url "https://www.eclipse.org/legal/epl-2.0/"}
+  :dependencies [[org.clojure/clojure "1.10.1"]
+                 [leadlab/grape "0.0.4"]]
+  :plugins [[lein-environ "1.1.0"]
+            [org.clojars.benfb/lein-gorilla "0.6.0"]]
+  :profiles {:dev {}}
+  :repl-options {:init-ns grapetest.core})
+```
+
 
 ## Usage
 Import the Grape library.
