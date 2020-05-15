@@ -1,6 +1,23 @@
+[![Clojars Project](https://img.shields.io/clojars/v/leadlab/grape.svg)](https://clojars.org/leadlab/grape)
+
 # Grape - Graph Rewriting and Persistence Engine 
 
 A Clojure library designed to provide support for graph rewriting based on a persistent graph store.
+
+# Quick Start
+
+* Grape requires the graph database Neo4j. The community edition (free) can be downloaded here: https://neo4j.com/download/
+* Create new clojure project with Leiningen ``lein new gapetest``
+* Create a new file ``profiles.clj`` to contain your neo4j connection info:
+
+```clojure
+{:dev {
+       :env {:db-url "http://localhost:7474/db/data/"
+             :db-usr "<your neo4j user name>"
+             :db-pw "<your neo4j password>"}}}
+```
+
+* 
 
 ## Usage
 Import the Grape library.
