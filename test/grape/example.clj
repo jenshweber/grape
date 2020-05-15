@@ -1,4 +1,7 @@
-(use 'grape.core)
+(ns grape.example
+  (:require
+    [grape.core :refer :all]
+    ))
 
 (gts 'example)
 
@@ -7,7 +10,6 @@
        (pattern
         (node 'n {:label "Person" :asserts {:name "'Jens'"}}))})
 
-(create-jens!)
 
 
 (rule 'create-person! ['p]
@@ -120,4 +122,6 @@
 (while (delete-any-node!))
 
 (defn clear! [] (while (delete-any-node!)))
+
+(clear!)
 
