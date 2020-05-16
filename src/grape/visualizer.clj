@@ -13,12 +13,14 @@
 
 (use 'gorilla-repl.image)
 
+(def ctr-atom (atom 0))
+
 (defn reset-ctr! []
-  (intern *ns* '_ctr 0))
+  (swap! ctr-atom (fn [c] 0)))
 
 (defn get-ctr! []
-  (intern *ns* '_ctr (inc (eval '_ctr)))
-  (eval '_ctr))
+  (swap! ctr-atom (fn [c] (+ 1 c)))
+  (deref ctr-atom))
 
 (defn dot->render [g]
   (dorothy/render g {:format :png}))
@@ -30,7 +32,10 @@
   (image-view
     (ImageIO/read
       (io/input-stream
-        (dorothy/render  g {:format :png})))))
+;  (dorothy/save! (dorothy/render  g {:format :png}) "out.png")
+        (dorothy/render  g {:format :png}))
+))
+)
 
 (defn dorothy->dot [g]
   (dorothy/dot g))
@@ -121,11 +126,10 @@
       ""
       (reduce str (map (partial graphelem->dot d c1 c2 o) els)))))
 
-(defn rule->dot [rid]
+(defn rule->dot [rid rule]
   "translate a rule to dot"
   (reset-ctr!)
   (let [n (name rid)
-        rule ((:rules (eval 'gragra)) rid)
         r (:read rule)
         d (:delete rule)
         c (:create rule)
@@ -137,11 +141,9 @@
          "}}")))
 
 
-(defn document-rule [r]
-  (dorothy/save! (rule->dot r) (str "doc/images/"(name r) ".png") {:format :png}))
 
-(defn document-rules []
-  (map document-rule (keys (:rules (intern *ns* 'gragra)))))
+
+
 
 
 

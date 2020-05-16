@@ -14,12 +14,12 @@
     [grape.tx-cypher :refer :all]
     [environ.core :refer [env]]
     [taoensso.timbre :as timbre
-     :refer (log  trace  debug  info  warn  error  fatal  report
-                  logf tracef debugf infof warnf errorf fatalf reportf
-                  spy get-env log-env)]
+     :refer (log trace debug info warn error fatal report
+                 logf tracef debugf infof warnf errorf fatalf reportf
+                 spy get-env log-env)]
     [taoensso.timbre.profiling :as profiling
      :refer (pspy pspy* profile defnp p p*)]
-    ))
+    [dorothy.core :as dorothy]))
 
 ; ---------------------------------------------------
 ; ENGINE
@@ -28,6 +28,31 @@
 (def dburi (env :db-url))
 (def dbusr (env :db-usr))
 (def dbpw (env :db-pw))
+
+(def rules-atom (atom {}))
+(def ret-atom (atom {}))
+(def bindings-atom (atom {}))
+
+(defn rules []
+  (deref rules-atom))
+
+(defn ret []
+  (deref ret-atom))
+
+(defn reset-ret! []
+  (swap! ret-atom (fn [c] {})))
+
+(defn update-ret! [i]
+  (swap! ret-atom (fn [c] (merge c i))))
+
+(defn bindings []
+  (deref bindings-atom))
+
+(defn add-binding! [k v]
+  (swap! bindings-atom (fn [c] (assoc c k v))))
+
+(defn add-rule! [n s]
+  (swap! rules-atom (fn [c] (assoc c n s))))
 
 (def conn (nr/connect dburi dbusr dbpw))
 
@@ -65,14 +90,14 @@
 ;           _ (println "Current bindings: " (eval '_ret))
 ;           _ (println "new returns:" (first tab))
            ]
-       (intern *ns* '_ret (merge (eval '_ret) (first tab) ))
+       (update-ret! (first tab))
        ret)))
   ([q]
    (dbquery q '())))
 
 
 (defn return-id [l]
-  ((eval '_ret) (name l)))
+  ((ret) (name l)))
 
 (defn return-node [l]
   (return-id l))
@@ -124,8 +149,8 @@
           (match-nacs m s (rest nacs))
           true)))))
 
-(defn rule-exists? [n]
-  (not (empty? (:rules (eval 'gragra) n))))
+;(defn rule-exists? [n]
+;  (not (empty? (:rules gragra n))))
 
 (defnp check [ms s nacs]
   "check nacs in context of prior matches"
@@ -154,7 +179,7 @@
 
 (defn resolve-consults [params]
   (map (fn [p] (if (and (vector? p) (= '__consult (first p)))
-                 ((eval '_bindings) (second p))
+                 ((bindings) (second p))
                  p))
        params))
 
@@ -231,7 +256,7 @@
             (= '__bind n) (let [k (first aparams)
                                 v (return-id (second aparams))]
                            ; (println " binding node id " v)
-                            (intern *ns* '_bindings (assoc (eval '_bindings) k v))
+                            (add-binding! k v)
 
                             (if new
                               (run-transaction (rest steps) (concat mps (list {:name n :btp 0 :max 0})) ctr)
@@ -240,7 +265,7 @@
             :else
 
             (let [;_ (println "RULE")
-                   r ((:rules (eval 'gragra)) n)
+                   r ((rules) n)
                    fparams (:params r)
                    aparams (resolve-consults aparams)]
               (when (nil? r)
@@ -324,7 +349,7 @@
 (defnp transact-iter
   [steps mps iter]
   (begintx)
-  (intern *ns* '_ret {})
+  (reset-ret!)
   (let [
         ;_ (println "Transact-iteration: " iter)
         ;_ (println "mps: " (map (fn [s] [(:name s) (:btp s) (:max s)]) mps))
@@ -480,50 +505,28 @@
                (assoc r :theory 'spo)
                r)]
        ;(validate-rule s)
-       (intern *ns* 'gragra (assoc (eval 'gragra) :rules (assoc (:rules (eval 'gragra)) n s) )))
-     (let [s (symbol n)]
-       (intern *ns* s (fn [& par] (attempt (transact (cons s par) ))))
-
-       (intern *ns* (symbol (str (name n) "-dot")) (fn [] (rule->dot n)))
-       ((intern *ns* (symbol (str (name n) "-show")) (fn [] (show (rule->dot n)))))
+       (add-rule! n s)
+       (let [sym (symbol n)]
+          (intern *ns* sym (fn [& par] (attempt (transact (cons sym par) )))))
+       (intern *ns* (symbol (str (name n) "-dot")) (fn [] (rule->dot n s)))
+       ((intern *ns* (symbol (str (name n) "-show")) (fn [] (show (rule->dot n s)))))
        )))
   ([n prop]
    (rule n [] prop)))
 
-(defn loadRules [module] 
-    (try 
-        (let [] 
-            (println (str "Attempting to load: " module)) 
-            (load-file module)
-        )(catch Exception e (println (str "failed to load: " module)))
+(defn document-rule [r]
+  (dorothy/save! (rule->dot r (r (rules))) (str "doc/images/" (name r) ".png") {:format :png}))
 
-    )
-)
+(defn document-rules []
+  (map document-rule (rules)))
 
-(defn inner_gts [n]
-  (let [check-syntax (partial check-syntax-generic
-                              (str "GTS    :- (gts ID ) \n"
-                                   "ID     :- *symbol* \n"
-                                   ))]
-    (check-syntax (symbol? n) "gts ID should be a symbol."))
-  (intern *ns* 'gragra {:_graph_name n :rules {}})
-  (intern *ns* '_ret)
-  (intern *ns* '_bindings {})
-  (rule 'delete-any-node!
+
+(rule 'delete-any-node!
       {:read (pattern (node 'n))
        :delete ['n]})
-  ;(loadRules modules)     
-  (intern *ns* 'clear! (fn [] (while ((eval 'delete-any-node!)))))
-  (println "end of inner_gts")
-)
 
-(defn gts "Makes a new GTS system" 
-    ([n] (let [] (println "[n]") (inner_gts n)))
-    ([n modules] (let [] 
-            (println (str "[n modules] -> " modules) ) 
-            (println modules) 
-            (inner_gts n) 
-            (dorun (map loadRules modules))
-     ))
-)
+(defn clear! []
+  (while (delete-any-node!)))
+
+
 

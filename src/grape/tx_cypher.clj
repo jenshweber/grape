@@ -8,9 +8,6 @@
             [grape.util :refer :all]
             ))
 
-(defn graphlabel []
-  (str ":_" (name (:_graph_name (eval 'gragra)))))
-
 
 (defn resolve-value [scope s]
   (let [[m par] (re-find #"(?:&)(\w+)" s)]
