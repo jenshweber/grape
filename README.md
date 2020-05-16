@@ -1,16 +1,69 @@
+[![Clojars Project](https://img.shields.io/clojars/v/leadlab/grape.svg)](https://clojars.org/leadlab/grape)
+
 # Grape - Graph Rewriting and Persistence Engine 
 
 A Clojure library designed to provide support for graph rewriting based on a persistent graph store.
 
-## Usage
-Import the Grape library.
+# Quick Start
+
+* **Install Neo4J** Grape requires the graph database Neo4j. The community edition (free) can be downloaded here: https://neo4j.com/download/
+* **Create Clojure project** For example with Leiningen ``lein new gapetest``
+* **Add profiles.clj** Create a new file ``profiles.clj`` to contain your neo4j connection info:
+
 ```clojure
-(use 'grape.core)
+{:dev {
+       :env {:db-url "http://localhost:7474/db/data/"
+             :db-usr "<your neo4j user name>"
+             :db-pw "<your neo4j password>"}}}
 ```
-Create a new graph transformation system and give it a name.
+
+* **Edit project.clj** Add the `grape` dependency to your project.clj. Add the `lein-environ` plugin, so that Leiningen can source environment variables from your profiles.clj file. If you want to use the browser-based REPL (Gorilla) for developing your graph transformation rules (recommended) also add the `lein-gorilla` plugin. Your project.clj file will look similar to:
+
 ```clojure
-(gts 'example)
+(defproject grapetest "0.1.0-SNAPSHOT"
+  :description "FIXME: write description"
+  :url "http://example.com/FIXME"
+  :license {:name "EPL-2.0 OR GPL-2.0-or-later WITH Classpath-exception-2.0"
+            :url "https://www.eclipse.org/legal/epl-2.0/"}
+  :dependencies [[org.clojure/clojure "1.10.1"]
+                 [leadlab/grape "X.X.X"]]
+  :plugins [[lein-environ "1.1.0"]
+            [org.clojars.benfb/lein-gorilla "0.6.0"]]
+  :profiles {:dev {}}
+  :repl-options {:init-ns grapetest.core})
 ```
+* **Start it up** Make sure the Neo4j database is running. Start a Gorilla REPL with `lein gorilla`. Open the indicated work sheet. Enter `(use 'grape.core)` to import the Grape and connect to Neo4J. (This may take a few seconds. If you are getting an exception, your database is not running or something is wrong with the connection details.)
+
+* **Load grape** enter `(use 'grape.core)` in the Web repl to load Grape
+
+* **Create a rule** Enter the following to create a rule that creates a node labeled "Hello". (You should see a visualization of the rule after you entered it.)
+
+```clojure
+(rule 'hello!
+  {:create (pattern
+             (node 'n1 {:label "Hello"}))})
+```
+
+* Execute the rule by calling it: `(hello!)`
+
+* Use the Neo4J browser (http://localhost:7474/browser/) to see that a node was indeed created in the graph database. (enter a simple cipher query: `match (n) return n;`
+
+* Enter another rule that matches the existing "Hello" node and links it to a newly created "Grape" node.
+
+```clojure
+(rule 'hello-grape!
+  {
+   :read (pattern
+           (node 'n1 {:label "Hello"}))
+   :create (pattern
+             (node 'n2 {:label "Grape"})
+             (edge 'e {:label "to" :src 'n1 :tar 'n2}))})
+```
+
+* Execute that rule `(hello-grape!)` and check with the Neo4J browser that the graph was indeed extended.
+
+# Grape Language
+
 Graph rewriting rules are defined using the ```rule``` form. Rules consist of three parts:
 - the ```:read``` specifies the graph pattern to be matched in the host graph
 - the ```:delete``` part specifies which graph elements from the matched host graph should be deleted
@@ -646,39 +699,6 @@ Grape static analysis error: identifier id is used but not declared
 ```
 Note, though, that Grape is schema-less, i.e., there is no need / ability to define a graph schema type for rules. Thus, Grape has no means of checking whether rule definitions are compliant to a particular graph class.
 
-## Modular Transformation Systems
-
-It is possible to define the rules for a GTS in "module" (file) that is seperated from the namespace in which the GTS was defined. This can be used to share common rules between different graph transformation systems. 
-
-Rules you wish to utilize in another module must be declared in a module without a GTS already declared. Consider these "rule-only" modules. For example, a simple rule-only module might look like: 
-
-```clojure
-(use 'grape.core) ;; load the grape.core to allow rule definition.
-
-;; Define rules as normal. 
-(rule 'testRule!
-      {:create
-             (pattern ... )
-      }
-)
-```
-
-Use ("import") rule-only modules during the gts definition.
-
-```clojure
-(ns grape.moduleExample (:require [grape.core :refer :all]))
-
-;; Create a new GTS, specify paths to modules to load.
-(gts 'moduleExample ["test/grape/test_module.clj"])
-
-;; Call rules that are already associated with gts
-(clear!) ;; from the default gts
-
-(testRule!) ;; loaded from test_module.clj
-```
-
-This example can be found in `test/grape/moduleExample.clj` and `test/grape/test_module.clj`.
-
 ## Rule Visualization and Documentation ##
 
 Grape supports automatic generation of rule visualizations based on the Graphviz tool. Each rule definition automatically creates a function to emit the rule in Graphviz (dot) format. The name of that function is <rulename>-dot. For example, the following function call will return the visual prepresentation of the above example rule:
@@ -692,32 +712,9 @@ Visual representations can also be saved as image files to the file system by ca
 (document-rule 'create-jens!) ; saves a PNG visual representation of rule 'createJens!
 (document-rules) ; saves PNG visual representations for all defined rules
 ```
-Indeed, if Lighttable is used as the IDE, the visual rule representation can be "inlined" within the IDE. This function requires the NerdyPainter plugin.
 
-## Integration with Native Clojure
 
-Grape can be integrated into a native clojure application using the [Leinigen Build Tool](http://leiningen.org/) by: 
-
-0. Install `lein` if required. Avaliable for OSX via homebrew: `brew install leiningen`
-1. Compiling the grape source into a .jar file. Use `lein compile; lein uberjar'
-2. Installing into your local repository. Use `lein install`
-3. Reference Graph in your new project's dependancies, for example: 
-
-```
-:dependencies [[org.clojure/clojure "1.7.0"]
-                 [environ "1.0.2"]
-                 [grape "0.1.0-SNAPSHOT"]]
-  :plugins [[lein-environ "1.0.2"]]
-```
-
-4. Provide an appropriate `profiles.clj` file to designate the Neo4j DB connection. 
-5. Include grape via Clojure's usual namespace application: 
-
-```
-(ns app.core (:require [grape.core :refer :all]))
-```
-
-Copyright © 2016 Jens Weber
+Copyright © 2016-20 Jens Weber
 
 Distributed under the Eclipse Public License either version 1.0 or (at
 your option) any later version.
