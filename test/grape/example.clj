@@ -1,9 +1,18 @@
-(ns grape.example
-  (:require
-    [grape.core :refer :all]
-    ))
+(use 'grape.core)
 
-(gts 'example)
+(rule 'hello!
+  {:create (pattern
+             (node 'n1 {:label "Hello"}))})
+
+(rule 'hello-grape!
+  {
+   :read (pattern
+           (node 'n1 {:label "Hello"}))
+   :create (pattern
+             (node 'n2 {:label "Grape"})
+             (edge 'e {:label "to" :src 'n1 :tar 'n2}))})
+
+(document-rule 'hello-grape!)
 
 (rule 'create-jens!
       {:create
@@ -62,6 +71,9 @@
                  (edge 'e2 {:label "employee" :src 'n3 :tar 'n1}))})
 
 (rewrite_contract!)
+
+
+
 
 
 (rule 'fire-employee! ['name]
