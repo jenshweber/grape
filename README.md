@@ -164,6 +164,19 @@ Formal parameters _p_ must be actualized when the rule is applied. The rule appl
 
 You can use `(-> find-person matches view)` in Gorilla REPL to validate that a new person with name "Flo" was indeed created.
 
+## Merged nodes
+Sometimes one would like to create nodes only if they are not already present. This is called _merging_. For example, consider the rule `create-person!` above. As it is, it creates a new Person node with a given name _p_ each time it is invoked. If we want a behaviour, where a new node is created only if such a node does not already exist, we can add a `:merged true` flag for that node. For example:
+
+```clojure
+(rule 'create-person2! ['p]
+  {:create
+   (pattern
+     (node 'n {:label "Person" :asserts {:name "'&p'"} :merge true}))})
+```
+
+![createJens](https://raw.githubusercontent.com/jenshweber/grape/master/doc/images/create-person2!.png)
+
+
 ## A rule with a _reader_
 The the next rule has a _read_ as well as a _create_ part. It matches two Person nodes with the names given as formal parameters and creates a _parent-of_ relationship between them.
 
