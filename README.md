@@ -71,7 +71,7 @@ Graph rewriting rules are defined using the ```rule``` form. Rules consist of th
 
 ### Example 0: A simple rule to find "Person" nodes
 
-Below is a simple rule to find a node of type "Person". (Node types are determined by their "label".)
+Below is a simple rule to find a node of type "Person". The ```node``` form is used to specify the node to be searched for. Node types are determined by their "label".
 
 ```clojure
 (rule 'find-persons
@@ -79,11 +79,19 @@ Below is a simple rule to find a node of type "Person". (Node types are determin
    (pattern
      (node 'n {:label "Person"}))})
 ```
-The visual representation of the above rule is given in the image below.
+The visual representation of the above rule is given in the image below. (The visual representation is automatically generated when using Gorilla repl. It can also be generate manually by calling `document-rule` - see at the end of this manual). 
+
 ![findPerson](https://raw.githubusercontent.com/jenshweber/grape/master/doc/images/find-person.png)
 
-### Example 1: A simple rule to create one node
-The following rule creates only one node. It has an empty ```:read``` and ```delete``` part, so it matches any host graph and deletes nothing.
+Since `find-person` does change the graph in any way, it is also called a graph _test_ or a graph _query_.
+
+#### Applying a rule ####
+
+Rules (and graph tests) can be executed, simply by calling them. A call to `(find-person)` will return `false` if no Person node can be matched - or true otherwise. In case of an empty database, the call will return `false`. 
+
+
+### Example 1: A simple rule to create a Person node
+The following rule creates only one node (of type Person). It has an empty ```:read``` and ```delete``` part, so it matches any host graph and deletes nothing.
 
 ```clojure
 (rule 'create-jens! 
@@ -97,13 +105,11 @@ The visual representation of the above rule is given in the image below. Here we
 
 ![createJens](https://raw.githubusercontent.com/jenshweber/grape/master/doc/images/create-jens!.png)
 
-#### Applying a rule ####
-
-Defining a rule results in the creation of a new function with the name of the rule. The rule can be applied by calling that function:
+As defined in Example 0, the rule can be applied by simply calling it:
 ```clojure
 (create-jens!)
 ```
-The call to the rule function returns ```true``` if (and only if) the rule application succeeds. 
+Since the rule has an empty `:read` part, it always applies and always returns `true`. Each time it is called, it creates a new node of type `Person` with an attribute `name` of value `Jens`. 
 
 ### Example 2: Parameterized rules
 Our first example rule was not very versatile, since it could not generate different _persons_. This can be improved by using _parameterized_ rules. The following rule is more generic, as it takes the name of the person to be created as a parameter (p).
