@@ -69,7 +69,7 @@ Graph rewriting rules are defined using the ```rule``` form. Rules consist of th
 - the ```:delete``` part specifies which graph elements from the matched host graph should be deleted
 - the ```:create``` part specifies which graph elements should be created when the rule is applied
 
-### Example 0: A simple rule to find "Person" nodes
+## Graph queries (Read-only rules)
 
 Below is a simple rule to find a node of type "Person". The ```node``` form is used to specify the node to be searched for. Node types are determined by their "label".
 
@@ -89,8 +89,7 @@ Since `find-person` does change the graph in any way, it is also called a graph 
 
 Rules (and graph tests) can be executed, simply by calling them. A call to `(find-person)` will return `false` if no Person node can be matched - or true otherwise. In case of an empty database, the call will return `false`. 
 
-
-### Example 1: A simple rule to create a Person node
+## Rules that create nodes
 The following rule creates only one node (of type Person). It has an empty ```:read``` and ```delete``` part, so it matches any host graph and deletes nothing.
 
 ```clojure
@@ -111,27 +110,44 @@ As defined in Example 0, the rule can be applied by simply calling it:
 ```
 Since the rule has an empty `:read` part, it always applies and always returns `true`. Each time it is called, it creates a new node of type `Person` with an attribute `name` of value `Jens`. 
 
-You can validate that nodes of type `Person` are indeed created by calling the graph query defined in Example 0 above again. It should now return `true` to indicate that there is a positive match.
+You can validate that nodes of type `Person` are indeed created by calling the graph query `find-person` defined above. It should now return `true` to indicate that there is at least one match.
 
 ### Returning query results
 
-Graph tests can be used to return query results. For example, the above graph test `find-person` can be used to return a sequence of all matches of the graph test. This is done by using the `query` form:
+Graph tests can be used to return query results. For example, the above graph test `find-person` can be used to return a sequence of all _matches_ of the graph test. This is done by calling the `matches` function after calling a graph test or rule:
 
 ```clojure
-(query find-person)
+(find-person)
+(matches)
 ```
 
 returns a sequence of matche:
 
 ```clojure
-({:nodes ({:data {:name "Jens"}, :metadata {:id 16, :labels ["Person"]}}), :edges ()}
- {:nodes ({:data {:name "Jens"}, :metadata {:id 62, :labels ["Person"]}}), :edges ()}
- {:nodes ({:data {:name "Jens"}, :metadata {:id 75, :labels ["Person"]}}), :edges ()})
+({:nodes ({:data {:name "Jens"}, :metadata {:id 16, :label "Person"}}), :edges ()}
+ {:nodes ({:data {:name "Jens"}, :metadata {:id 62, :label "Person"}}), :edges ()}
+ {:nodes ({:data {:name "Jens"}, :metadata {:id 75, :label "Person"}}), :edges ()})
 ```
 
 Each item in the above sequence is a valid match of the graph test. (In the above example, the rule `create-jens!` was invoked three times - and thus created three nodes, leading to three possible matches for rule `find-person`.
 
-### Example 2: Parameterized rules
+### Visualizing query results
+
+Query results can be visualized in Gorilla REPL with the `view` function. For example
+
+```cloure
+(view (matches))
+```
+
+displays the following image:
+
+![findPersonVis](https://raw.githubusercontent.com/jenshweber/grape/master/doc/images/find-person-query.png)
+
+Note that the above visualization shows the union of all the (three) possible matches of `find-person`. Matches can also be visualized individually, for example `(view (first (matches)))` visualizes the first returned match, i.e., a single `Person` node with id 16.  
+
+While a simple call to `matches` returns the matches for the most recently executed rule, `matches` also accepts a rule to be executed as a parameter. This allows using the Clojure threading macro for maximum readability, e.g., `(-> find-person matches first view)` displays the first match of rule `find-person`. 
+
+## Parameterized rules
 Our first example rule was not very versatile, since it could not generate different _persons_. This can be improved by using _parameterized_ rules. The following rule is more generic, as it takes the name of the person to be created as a parameter (p).
 ```clojure
 (rule 'create-person! ['p]
@@ -146,7 +162,9 @@ Formal parameters _p_ must be actualized when the rule is applied. The rule appl
 (create-person! "Flo")
 ```
 
-### Example 3: A rule with a _reader_
+You can use `(-> find-person matches view)` in Gorilla REPL to validate that a new person with name "Flo" was indeed created.
+
+## A rule with a _reader_
 The the next rule has a _read_ as well as a _create_ part. It matches two Person nodes with the names given as formal parameters and creates a _parent-of_ relationship between them.
 
 ```clojure
@@ -162,7 +180,20 @@ The the next rule has a _read_ as well as a _create_ part. It matches two Person
 ```
 ![createJens](https://raw.githubusercontent.com/jenshweber/grape/master/doc/images/parent_of!.png)
 
-### Example 4: Isomorphic vs homomorphic rules
+The call to `(parent_of! "Jens" "Flo")` should return `true` if you have at least one Person node with name "Flo" and one Person node with name "Jens". However, note that in the above example, we have three Person notes with name "Jens". Therefore, there are three possible matches.
+
+```clojure
+(count (matches))
+3
+```
+
+The order of matches is non-deterministic and Grape uses the first one in the return list:
+
+```clojure
+(-> (matches) first view)
+```
+
+## Isomorphic vs homomorphic rules
 The following rule is similar to Example 3.
 
 ```clojure
@@ -194,7 +225,7 @@ However, we cannot use it to express sitations where a person is self-employed, 
 ```
 The above rule allows us to express our "self-employment" example.
 
-### Example 5: A rule with _delete_
+## A rule with _delete_
 
 The following rule also deletes matched graph elements. In this case it replaces a "works_for" edge with a new "Contract" node and two edges.
 
@@ -213,7 +244,7 @@ rule 'rewrite_contract!
 ![createJens](https://raw.githubusercontent.com/jenshweber/grape/master/doc/images/rewrite_contract!.png)
 Another interesting aspect about the above rule is that the _create_ part of the rule copies an attribute from a graph element matched in the _read_ part of the rule (```n1.name```).
 
-### Example 6: Dealing with "dangling" edges
+## Dealing with "dangling" edges
 Consider the following rule whose purpose it is to "fire" an employee with a given name (by deleting the contract node). 
 ```clojure
 (rule 'fire-employee! ['name] 
@@ -235,7 +266,7 @@ But what happens to the 'employee' edge _e_ when the contract node _con_ is dele
               (edge 'e {:label "employee" :src 'con :tar 'emp}))
        :delete ['con]})
 ```
-### Example 7: Rules with Negative Application Conditions (NACs)
+## Rules with Negative Application Conditions (NACs)
 Negative applications conditions (NACs) are conditions that, if met, inhibit a rule from being applied. Consider the ```works_for!``` rule from Example 4. You may want to specify that a 'works_for' edge is created between two persons _only_ if there isn't already such an edge in the graph. A NAC can be used to accomplish this, as seen in the following rule:
 ```clojure
 (rule 'works_for2! ['e 's]
@@ -252,7 +283,7 @@ NACs are specified using 'NAC' forms, which essentially specifiy graph patterns 
 
 ![works_for1!](https://raw.githubusercontent.com/jenshweber/grape/master/doc/images/works_for2!.png)
 
-### Example 8: Rule with multiple NACs
+## Rule with multiple NACs
 
 This example shows a rule with multiple (two) NACs. The rule creates a _sole_employer_ relationship between an employee and an employer, if the employee works for only that single employer (and a _sole_employer_ relationship does not yet exist).
 
@@ -276,7 +307,7 @@ This example shows a rule with multiple (two) NACs. The rule creates a _sole_emp
 
 ![sole_employer!](https://raw.githubusercontent.com/jenshweber/grape/master/doc/images/sole_employer!.png)
 
-### Example 9: Rules as building blocks in Clojure programs
+## Rules as building blocks in Clojure programs
 Of course, rules can be used within Clojure programs. For example, a rule can be applied repeatedly using the ```while_ form``` Given the following example rule that deletes any node, we can simply delete the entire graph using ```while```:
 ```clojure
 (rule 'delete-any-node!
@@ -289,7 +320,7 @@ Of course, rules can be used within Clojure programs. For example, a rule can be
 
 However, Grape provides special control structures that support transactions. This is explained in the next few examples.
 
-### Example 10: Transactions
+## Transactions
 
 Grape supports atomic transactions. Consider the following rule ```let_one_go!``` as an example:
 
@@ -331,7 +362,7 @@ Of course, transactions can be used to define Clojure operations:
      (apl 'let_one_go! employer))))
 ```
 
-### Example 11: Backtracking
+## Backtracking
 
 A Grape rule may have multiple possible applications in a host graph. Grape supports _backtracking_ when working with transactions. Consider the following rules ```hire!``` and ```promote!``` as an example. The first rule (```hire!```) recruits a worker on the job market for a given employer ```name```.
 
@@ -398,7 +429,7 @@ In general, there will be many possible matches for ```hire!```. However, only t
 
 Attempting to hire a Director for employer "Jens" ```(attempt (hire_director! "Jens"))``` may attempt to hire any of the workers but only succeed with promoting worker ```w4```, as all other workers also work for other employers. Grape will find this only possible match by using backtracking.
 
-### Example 12: Passing values from one rule application to another with ```bind``` and ```consult```
+## Passing values from one rule application to another with ```bind``` and ```consult```
 
 At times we may want to pass values from one rule application context to another. This can be done in Grape transactions using the ```bind``` and ```consult``` forms. Consider the same starting graph as in the previous example.  Now consider the following rules ```hire-someone!``` and ```train!```.
 
@@ -434,7 +465,7 @@ Note that the second rule (```train!```) receives the worker node ```w``` as a p
       (apl 'train! employer (consult 'new-hire))))
 ```
 
-### Example 13: Control structures: ```Until```
+## Control structures: ```Until```
 
 Sometimes we may need additional control structures in transactions. For example, consider the following graph setup:
 
@@ -494,7 +525,7 @@ This can be accomplished by using the Grape ```until``` control structure. The f
 
 Similar to loops in other programming languages, ```until``` control structures may not necessarily terminate. Of course, the above example program quite clearly terminates, as each iteration removes a ```likes``` edge from the graph - and the number of these edges is finite. However, in general, transactions that use ```until``` may loop forever. 
 
-### Example 14: Control structures: ```Choice```
+## EControl structures: ```Choice```
 
 Sometimes we may want to try different rule applications non-deterministically. The ```choice``` constrol structure can be used for this. Consider the following two rules:
 
@@ -555,7 +586,7 @@ The graph test ```likeEachOther? ``` is defined as:
 ```
 ![likeEachOther?](https://raw.githubusercontent.com/jenshweber/grape/master/doc/images/likeEachOther%3F.png)
 
-### Example 15: Control structures: ```Avoid```
+## Control structures: ```Avoid```
 Sometimes we may want to specify a condition to avoid in a transaction. To some degree, this can be achieved by using Negative Application Conditions (NACs) attached to rules (see above). However, the expressiveness of NACs is limited. Therefore, Grape provides the ```avoid``` control structure. 
 
 Consider the following start graph
@@ -609,7 +640,7 @@ Graph test ```double?``` is defined below:
 ```
 ![double?](https://raw.githubusercontent.com/jenshweber/grape/master/doc/images/double%3F.png)
 
-### Example 16: Attribute conditions and assignments - The Ferryman example
+## Attribute conditions and assignments - The Ferryman example
 We already saw how simple equality conditions on node and edge attributes can be expressed. For more complex conditions on attributes (for example inequalities), Grape provides a special ```condition``` form in the read part of rules. Moreover, Grape provides an ```assign``` form in the create part of rules to revise attribute values of machted graph elements. These two concepts are exemplified with the popular Ferryman problem. Consider a ferryman who is tasked to ship a goat, a grape and a wolf from one side of the river to the other side. The ferryman can only ship one thing at a time. Moreover, if left unsupervised, the wolf will eat the goat and the goat will eat the grape, respectively. The Ferryman problem is to find a sequence of actions to safely ship all three items to the other side. In Grape it can be described in the following transaction:
 
 ```clojure
