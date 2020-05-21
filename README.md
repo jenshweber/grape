@@ -69,14 +69,35 @@ Graph rewriting rules are defined using the ```rule``` form. Rules consist of th
 - the ```:delete``` part specifies which graph elements from the matched host graph should be deleted
 - the ```:create``` part specifies which graph elements should be created when the rule is applied
 
-### Example 1: A simple rule to create one node
-The following rule creates only one node. It has an empty ```:read``` and ```delete``` part, so it matches any host graph and deletes nothing.
+### Example 0: A simple rule to find "Person" nodes
+
+Below is a simple rule to find a node of type "Person". The ```node``` form is used to specify the node to be searched for. Node types are determined by their "label".
+
+```clojure
+(rule 'find-person
+  {:read
+   (pattern
+     (node 'n {:label "Person"}))})
+```
+The visual representation of the above rule is given in the image below. (The visual representation is automatically generated when using Gorilla repl. It can also be generate manually by calling `document-rule` - see at the end of this manual). 
+
+![findPerson](https://raw.githubusercontent.com/jenshweber/grape/master/doc/images/find-person.png)
+
+Since `find-person` does change the graph in any way, it is also called a graph _test_ or a graph _query_.
+
+#### Applying a rule ####
+
+Rules (and graph tests) can be executed, simply by calling them. A call to `(find-person)` will return `false` if no Person node can be matched - or true otherwise. In case of an empty database, the call will return `false`. 
+
+
+### Example 1: A simple rule to create a Person node
+The following rule creates only one node (of type Person). It has an empty ```:read``` and ```delete``` part, so it matches any host graph and deletes nothing.
 
 ```clojure
 (rule 'create-jens! 
       {:create 
           (pattern 
-            (node 'n {:label "Person" :asserts {:name "'Jens'"}}))}))
+            (node 'n {:label "Person" :asserts {:name "'Jens'"}}))})
 ```
 The ```node``` form is used to specify the node to be created. Grape currently supports only one (optional) type label for nodes, but multiple (optional) property definitions (asserts). Properties are defined using maps. Note that the value of the maps is always a clojure String that wraps the actual expression that defines the Grape property. Thus, if you need a String value in grape, you need to use (single) quotes within the clojure value string, as exemplified above.
 
@@ -84,13 +105,31 @@ The visual representation of the above rule is given in the image below. Here we
 
 ![createJens](https://raw.githubusercontent.com/jenshweber/grape/master/doc/images/create-jens!.png)
 
-#### Applying a rule ####
-
-Defining a rule results in the creation of a new function with the name of the rule. The rule can be applied by calling that function:
+As defined in Example 0, the rule can be applied by simply calling it:
 ```clojure
 (create-jens!)
 ```
-The call to the rule function returns ```true``` if (and only if) the rule application succeeds. 
+Since the rule has an empty `:read` part, it always applies and always returns `true`. Each time it is called, it creates a new node of type `Person` with an attribute `name` of value `Jens`. 
+
+You can validate that nodes of type `Person` are indeed created by calling the graph query defined in Example 0 above again. It should now return `true` to indicate that there is a positive match.
+
+### Returning query results
+
+Graph tests can be used to return query results. For example, the above graph test `find-person` can be used to return a sequence of all matches of the graph test. This is done by using the `query` form:
+
+```clojure
+(query find-person)
+```
+
+returns a sequence of matche:
+
+```clojure
+({:nodes ({:data {:name "Jens"}, :metadata {:id 16, :labels ["Person"]}}), :edges ()}
+ {:nodes ({:data {:name "Jens"}, :metadata {:id 62, :labels ["Person"]}}), :edges ()}
+ {:nodes ({:data {:name "Jens"}, :metadata {:id 75, :labels ["Person"]}}), :edges ()})
+```
+
+Each item in the above sequence is a valid match of the graph test. (In the above example, the rule `create-jens!` was invoked three times - and thus created three nodes, leading to three possible matches for rule `find-person`.
 
 ### Example 2: Parameterized rules
 Our first example rule was not very versatile, since it could not generate different _persons_. This can be improved by using _parameterized_ rules. The following rule is more generic, as it takes the name of the person to be created as a parameter (p).
