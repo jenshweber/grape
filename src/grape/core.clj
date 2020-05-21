@@ -21,6 +21,8 @@
      :refer (pspy pspy* profile defnp p p*)]
     [dorothy.core :as dorothy]))
 
+(use 'clojure.walk)
+
 ; ---------------------------------------------------
 ; ENGINE
 ; ---------------------------------------------------
@@ -32,6 +34,7 @@
 (def rules-atom (atom {}))
 (def ret-atom (atom {}))
 (def bindings-atom (atom {}))
+(def last-match-atom (atom '()))
 
 (defn rules []
   (deref rules-atom))
@@ -89,12 +92,52 @@
            ret (map (fn [x] (sort-graph-elms x nids eids)) tab)
 ;           _ (println "Current bindings: " (eval '_ret))
 ;           _ (println "new returns:" (first tab))
+
            ]
        (update-ret! (first tab))
        ret)))
   ([q]
    (dbquery q '())))
 
+
+(defn query-match [i]
+  (let [nids (vals (:nodes i))
+        nids-str (str "[" (clojure.string/join "," nids) "]")
+        eids (vals (:edges i))
+        eids-str (str "[" (clojure.string/join "," eids) "]")
+        qn (str "match (n) where ID(n) in " nids-str " return  n")
+        qe (str "match ()-[e]->() where ID(e) in " eids-str " return e")
+        ]
+    {:nodes (->> (keywordize-keys (cy/tquery conn qn))
+                 (map (fn [i] (:n i)))
+                 (map (fn [i] {:data (:data i)
+                               :metadata {:id (-> i :metadata :id)
+                                          :label (-> i :metadata :labels first)}
+                               })))
+     :edges (->> (keywordize-keys (cy/tquery conn qe))
+                 (map (fn [i] (:e i)))
+                 (map (fn [i] {:metadata {:id (-> i :metadata :id)
+                                          :label (-> i :metadata :type)}
+                               :start (-> i :start (str/split #"/") last)
+                               :end (-> i :end (str/split #"/") last)})))
+                 }
+
+    )
+  )
+
+
+
+(defn results []
+  (map query-match (deref last-match-atom)))
+
+(defn matches
+  ([r & params]
+   (if (empty? params)
+     (r)
+    (r params))
+   (results))
+  ([]
+   (results)))
 
 (defn return-id [l]
   ((ret) (name l)))
@@ -131,6 +174,7 @@
               (dbquery q m))
               ;          _ (println "\nRESULT " m)
           ]
+      (swap! last-match-atom (fn [_] m)) ; store last match in atom
       m)))
 
 (defnp match-nacs [m s nacs]
@@ -483,7 +527,6 @@
           r (if (number? f) (rest xs) xs)]
       ['NAC id (apply pattern r)])))
 
-
 (defn rule
   "DSL form for specifying a graph transformation"
   ([n params prop]
@@ -507,12 +550,15 @@
        ;(validate-rule s)
        (add-rule! n s)
        (let [sym (symbol n)]
-          (intern *ns* sym (fn [& par] (attempt (transact (cons sym par) )))))
+         (intern *ns* sym (fn [& par] (attempt (transact (cons sym par) )))))
        (intern *ns* (symbol (str (name n) "-dot")) (fn [] (rule->dot n s)))
        ((intern *ns* (symbol (str (name n) "-show")) (fn [] (show (rule->dot n s)))))
        )))
   ([n prop]
    (rule n [] prop)))
+
+
+
 
 (defn document-rule [r]
   (dorothy/save! (rule->dot r (r (rules))) (str "doc/images/" (name r) ".png") {:format :png}))
@@ -530,3 +576,40 @@
 
 
 
+
+
+(defn qnodedata->dot [[k v]]
+  (str (name k) "='" v "'"))
+
+(defn qnode->dot [n]
+  (str " n" (-> n :metadata :id)
+       " [label=\"" (-> n :metadata :id) ":" (-> n :metadata :label)
+       (if (empty? (:data n))
+         " "
+         " | ")
+       (str/join (map qnodedata->dot (:data n)))
+       "\"] "
+  ))
+
+(defn qedge->dot [e]
+  (str " n" (-> e :start)
+       " -> "
+       " n" (-> e :end)
+       " [label=\"" (-> e :metadata :label) "\"] "
+       ))
+
+(defn query->dot [g]
+  (let [r (if (map? g)
+            g
+            (reduce (fn [m n] (merge-with concat m n))  g)
+            )]
+    (str "digraph L {   rankdir=LR; node [shape=Mrecord]; "
+       (str/join (map qnode->dot (:nodes r)))
+       (str/join (map qedge->dot (:edges r)))
+       "}")))
+
+
+(defn view [g]
+  (-> g
+      query->dot
+      show))

@@ -4,6 +4,8 @@
   {:create (pattern
              (node 'n1 {:label "Hello"}))})
 
+(hello!)
+
 (rule 'hello-grape!
   {
    :read (pattern
@@ -12,7 +14,32 @@
              (node 'n2 {:label "Grape"})
              (edge 'e {:label "to" :src 'n1 :tar 'n2}))})
 
+(hello-grape!)
+
+(rule 'hello?
+  {:read  (pattern
+           (node 'n1 {:label "Hello"}))})
+
+(hello?)
+
+
 (document-rule 'hello-grape!)
+
+
+(rule 'find-person
+  {:read
+   (pattern
+     (node 'n {:label "Person"}))})
+
+(rule 'find-parent
+  {:read
+   (pattern
+     (node 'p)
+     (node 'c)
+     (edge 'e {:label "parent_of" :src 'p :tar 'c } )
+     )})
+
+(document-rule 'find-person)
 
 (rule 'create-jens!
       {:create

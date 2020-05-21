@@ -37,8 +37,6 @@
 ))
 )
 
-(defn dorothy->dot [g]
-  (dorothy/dot g))
 
 (defn asserts->dot [as]
   "Translate a map of assertions to Dot"
@@ -139,6 +137,8 @@
          (pattern->dot r d "black" "red" "")
          (pattern->dot c [] "green" "green" "")
          "}}")))
+
+
 
 
 

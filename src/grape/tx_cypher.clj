@@ -41,7 +41,7 @@
 
 (defn edge->cypher [s m e]
   (let [c (second e)
-        k (if (= m :match) " MATCH" " CREATE")]
+        k (if (= m :match) " MATCH" " MERGE")]
     (str k " (" (:src c) ")-[" (:id c)
          (let [l (:label c)]
            (if (nil? l)
