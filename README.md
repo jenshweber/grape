@@ -69,6 +69,19 @@ Graph rewriting rules are defined using the ```rule``` form. Rules consist of th
 - the ```:delete``` part specifies which graph elements from the matched host graph should be deleted
 - the ```:create``` part specifies which graph elements should be created when the rule is applied
 
+### Example 0: A simple rule to find "Person" nodes
+
+Below is a simple rule to find a node of type "Person". (Node types are determined by their "label".)
+
+```clojure
+(rule 'find-persons
+  {:read
+   (pattern
+     (node 'n {:label "Person"}))})
+```
+The visual representation of the above rule is given in the image below.
+![findPerson](https://raw.githubusercontent.com/jenshweber/grape/master/doc/images/find-person.png)
+
 ### Example 1: A simple rule to create one node
 The following rule creates only one node. It has an empty ```:read``` and ```delete``` part, so it matches any host graph and deletes nothing.
 
