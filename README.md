@@ -89,7 +89,6 @@ Since `find-person` does change the graph in any way, it is also called a graph 
 
 Rules (and graph tests) can be executed, simply by calling them. A call to `(find-person)` will return `false` if no Person node can be matched - or true otherwise. In case of an empty database, the call will return `false`. 
 
-
 ## Rules that create nodes
 The following rule creates only one node (of type Person). It has an empty ```:read``` and ```delete``` part, so it matches any host graph and deletes nothing.
 
@@ -111,14 +110,15 @@ As defined in Example 0, the rule can be applied by simply calling it:
 ```
 Since the rule has an empty `:read` part, it always applies and always returns `true`. Each time it is called, it creates a new node of type `Person` with an attribute `name` of value `Jens`. 
 
-You can validate that nodes of type `Person` are indeed created by calling the graph query defined in Example 0 above again. It should now return `true` to indicate that there is a positive match.
+You can validate that nodes of type `Person` are indeed created by calling the graph query `find-person` defined above. It should now return `true` to indicate that there is at least one match.
 
 ### Returning query results
 
-Graph tests can be used to return query results. For example, the above graph test `find-person` can be used to return a sequence of all matches of the graph test. This is done by using the `query` form:
+Graph tests can be used to return query results. For example, the above graph test `find-person` can be used to return a sequence of all _matches_ of the graph test. This is done by calling the `matches` function after calling a graph test or rule:
 
 ```clojure
-(query find-person)
+(find-person)
+(matches)
 ```
 
 returns a sequence of matche:
@@ -136,14 +136,16 @@ Each item in the above sequence is a valid match of the graph test. (In the abov
 Query results can be visualized in Gorilla REPL with the `view` function. For example
 
 ```cloure
-(view (query find-person))
+(view (matches))
 ```
 
 displays the following image:
 
 ![findPersonVis](https://raw.githubusercontent.com/jenshweber/grape/master/doc/images/find-person-query.png)
 
-Note that the above visualization shows the union of all the (three) possible matches of `find-person`. Matches can also be visualized individually, for example `(view (first (query find-person)))` visualizes the first returned match, i.e., a single `Person` node with id 16.  The Clojure threading macros provide better readability, e.g., the above expression can simplified to `(-> find-person query first view)`. 
+Note that the above visualization shows the union of all the (three) possible matches of `find-person`. Matches can also be visualized individually, for example `(view (first (matches)))` visualizes the first returned match, i.e., a single `Person` node with id 16.  
+
+While a simple call to `matches` returns the matches for the most recently executed rule, `matches` also accepts a rule to be executed as a parameter. This allows using the Clojure threading macro for maximum readability, e.g., `(-> find-person matches first view)` displays the first match of rule `find-person`. 
 
 ## Parameterized rules
 Our first example rule was not very versatile, since it could not generate different _persons_. This can be improved by using _parameterized_ rules. The following rule is more generic, as it takes the name of the person to be created as a parameter (p).
@@ -160,6 +162,8 @@ Formal parameters _p_ must be actualized when the rule is applied. The rule appl
 (create-person! "Flo")
 ```
 
+You can use `(-> find-person matches view)` in Gorilla REPL to validate that a new person with name "Flo" was indeed created.
+
 ## A rule with a _reader_
 The the next rule has a _read_ as well as a _create_ part. It matches two Person nodes with the names given as formal parameters and creates a _parent-of_ relationship between them.
 
@@ -175,6 +179,19 @@ The the next rule has a _read_ as well as a _create_ part. It matches two Person
 (parent_of! "Jens" "Flo")
 ```
 ![createJens](https://raw.githubusercontent.com/jenshweber/grape/master/doc/images/parent_of!.png)
+
+The call to `(parent_of! "Jens" "Flo")` should return `true` if you have at least one Person node with name "Flo" and one Person node with name "Jens". However, note that in the above example, we have three Person notes with name "Jens". Therefore, there are three possible matches.
+
+```clojure
+(count (matches))
+3
+```
+
+The order of matches is non-deterministic and Grape uses the first one in the return list:
+
+```clojure
+(-> (matches) first view)
+```
 
 ## Isomorphic vs homomorphic rules
 The following rule is similar to Example 3.
