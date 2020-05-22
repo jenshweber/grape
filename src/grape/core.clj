@@ -451,12 +451,13 @@
   ([id rest]
    (let [check-syntax (partial check-syntax-generic
                                (str "NODE   :- ( node ID <PROP> ) \n"
-                                    "PROP   :- { <LABEL> <ASSERT> } \n"
+                                    "PROP   :- { <LABEL> <ASSERT> <MERGE> } \n"
                                     "LABEL  :- :label *string* \n"
                                     "ASSERT :- :asserts {KEYVAL*} \n"
                                     "KEYVAL :- KEY *string* \n"
                                     "ID     :- *symbol* \n"
-                                    "KEY    :- *keyword* \n"))]
+                                    "KEY    :- *keyword* \n"
+                                    "MERGE  :- :merge true | false"))]
      (check-syntax (symbol? id) "ID should be a symbol."))
    ['node (assoc rest :id id)])
   ([id]

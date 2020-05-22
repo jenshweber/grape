@@ -53,9 +53,15 @@
        (pattern
         (node 'n {:label "Person" :asserts {:name "'&p'"}}))})
 
+(rule 'create-person2! ['p]
+  {:create
+   (pattern
+     (node 'n {:label "Person" :asserts {:name "'&p'"} :merge true}))})
+
+(document-rule 'create-person2!)
 
 
-(create-person! "Flo")
+(create-person2! "Flo")
 
 
 

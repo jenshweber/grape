@@ -28,7 +28,9 @@
 
 (defn node->cypher [s m n]
   (let [c (second n)
-        k (if (= m :match) " MATCH" " CREATE")
+        k (if (= m :match) " MATCH"
+                           (if (:merge c) " MERGE"
+                                          " CREATE"))
         nid (:id c)]
     (str k " (" nid
          (let [l (:label c)]

@@ -49,9 +49,13 @@
   (let [p (second n)
         name (:id p)
         l (:label p)
-        as (:asserts p)]
-    (str " " name " [color=" c " shape=record penwidth=bold  " o " "
-         "label=\"{" name (if (nil? l) "" (str ":" l))
+        as (:asserts p)
+        c (if (:merge p) "green4" c)]
+    (str " "
+         name " [color=" c " shape=record penwidth=bold  " o " "
+         "label=\"{"
+         name (if (nil? l) "" (str ":" l))
+         (if (:merge p) " (merged)" "")
          (if (empty? as)
            " "
            (str " | " (asserts->dot as)))
