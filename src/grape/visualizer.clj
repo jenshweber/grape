@@ -43,7 +43,7 @@
   (if (empty? as)
     ""
     (str (reduce (partial str-sep "\n") (map (fn [[k v]]
-                                               (str (name k) "=" v)) as)))))
+                                               (str (name k) "=" v )) as)))))
 
 (defn node->dot [n c o]
   (let [p (second n)

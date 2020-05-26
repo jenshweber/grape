@@ -3,7 +3,7 @@
     [clojure.math.combinatorics :as combo]
     [schema.core :as s]
     [clojure.string :as str]
-    [clojure.set :refer :all]
+    [clojure.set :refer [subset?]]
     [grape.visualizer :refer :all]
     [grape.tx-cypher :refer :all]
     [grape.util :refer :all]
@@ -35,6 +35,19 @@
 (def ret-atom (atom {}))
 (def bindings-atom (atom {}))
 (def last-match-atom (atom '()))
+(def constraints-atom (atom '()))
+(def tx-atom (atom nil))
+
+(defn tx [] (deref tx-atom))
+
+(defn set-tx [t] (swap! tx-atom (fn [old] t)))
+
+(defn add-violation! [msg f]
+  (swap! constraints-atom (fn [old] (conj old [msg f]))))
+
+(defn reset-violations! []
+  (swap! constraints-atom  (fn [old] '())))
+
 
 (defn rules []
   (deref rules-atom))
@@ -60,13 +73,32 @@
 (def conn (nr/connect dburi dbusr dbpw))
 
 (defn begintx []
-  (intern *ns* 'tx (nt/begin-tx conn)))
+  (set-tx (nt/begin-tx conn)))
 
 (defn committx []
-  (nt/commit conn (eval 'tx)))
+  (nt/commit conn (tx))
+  (set-tx nil))
 
 (defn rollbacktx []
-  (nt/rollback conn (eval 'tx)))
+  (nt/rollback conn (tx))
+  (set-tx nil))
+
+(declare run-transaction)
+
+(defn no-violations-iter [cs]
+  (if (empty? cs)
+    true
+    (let [n (-> cs first first)
+          f  (-> cs first second)]
+      (if (not (f))
+        (no-violations-iter (rest cs))
+        (do
+          (println "Grape schema constraint failed: " n)
+          false)))))
+
+(defn no-violations? []
+  (no-violations-iter (deref constraints-atom)))
+
 
 (defn sort-graph-elms [x nids eids]
   {:nodes (select-keys x nids)
@@ -82,12 +114,13 @@
 (defnp dbquery
   ([q p]
    (let [
-         ;_ (println "DBQuery: " q)
-         res (nt/execute conn (eval 'tx) [(nt/statement q)])
+ ;        _ (println "DBQuery: " q)
+         _ (when (nil? (tx)) (begintx))
+         res (nt/execute conn (tx) [(nt/statement q)])
          els (:els (second p))
          eids (map name (map get-id (filter-elem 'edge els)))
          nids (map name (map get-id (filter-elem 'node els )))]
-     (intern *ns* 'tx (first res))
+     (set-tx (first res))
      (let [tab (tabelize res)
            ret (map (fn [x] (sort-graph-elms x nids eids)) tab)
 ;           _ (println "Current bindings: " (eval '_ret))
@@ -99,32 +132,52 @@
   ([q]
    (dbquery q '())))
 
+;(str/join (map (fn [k v] (str " (" k ")  where ID(" k ")=" v " ") {"s" 168, "t" 245})))
 
 (defn query-match [i]
-  (let [nids (vals (:nodes i))
-        nids-str (str "[" (clojure.string/join "," nids) "]")
-        eids (vals (:edges i))
-        eids-str (str "[" (clojure.string/join "," eids) "]")
-        qn (str "match (n) where ID(n) in " nids-str " return  n")
-        qe (str "match ()-[e]->() where ID(e) in " eids-str " return e")
+  (let [qn (str
+             (reduce-kv (fn [s k v] (str s " MATCH (" k ")  where ID(" k ")=" v " ")) "" (:nodes i))
+             " return *")
+        qe  (str
+             (reduce-kv (fn [s k v] (str s " MATCH ()-[" k "]->()  where ID(" k ")=" v " ")) "" (:edges i))
+             " return *")
+;        _ (println "QN: " qn)
+;        _ (println "QE: " qe)
         ]
     {:nodes (->> (keywordize-keys (cy/tquery conn qn))
-                 (map (fn [i] (:n i)))
+                 (map (fn [i] (reduce-kv (fn [s k v]
+                                          (conj s (assoc v :handle (name k))))
+                                          '()
+                                          i
+                                 )))
+                 (first)
                  (map (fn [i] {:data (:data i)
                                :metadata {:id (-> i :metadata :id)
+                                          :handle (-> i :handle)
                                           :label (-> i :metadata :labels first)}
                                })))
-     :edges (->> (keywordize-keys (cy/tquery conn qe))
-                 (map (fn [i] (:e i)))
+     :edges (if (empty? (:edges i))
+              '()
+            (->> (keywordize-keys (cy/tquery conn qe))
+                 (map (fn [i] (reduce-kv (fn [s k v]
+                                           (conj s (assoc v :handle (name k))))
+                                         '()
+                                         i
+                                         )))
+                 (first)
                  (map (fn [i] {:metadata {:id (-> i :metadata :id)
+                                          :handle (-> i :handle)
                                           :label (-> i :metadata :type)}
                                :start (-> i :start (str/split #"/") last)
-                               :end (-> i :end (str/split #"/") last)})))
-                 }
+                               :end (-> i :end (str/split #"/") last)}))))
+     }
 
     )
   )
 
+(keywordize-keys (cy/tquery conn "match (s) where ID(s)=168 match (t) where ID(t) = 245 return *"))
+
+(cy/tquery conn "match (s) where ID(s)=168 match (t) where ID(t) = 245 return *")
 
 
 (defn results []
@@ -151,14 +204,14 @@
 (defn return-node-props [par]
   (let [i (return-id par)
         _ (begintx)
-        res (nt/execute conn (eval 'tx) [(nt/statement (str "MATCH (n) WHERE ID(n)=" i " RETURN *"))])
+        res (nt/execute conn (tx) [(nt/statement (str "MATCH (n) WHERE ID(n)=" i " RETURN *"))])
         tab (tabelize res)]
     (first (vals (first tab)))))
 
 (defn return-edge-props [par]
   (let [i (return-id par)
         _ (begintx)
-        res (nt/execute conn (eval 'tx) [(nt/statement (str "MATCH ()-[e]->() WHERE ID(e)=" i " RETURN *"))])
+        res (nt/execute conn (tx) [(nt/statement (str "MATCH ()-[e]->() WHERE ID(e)=" i " RETURN *"))])
         tab (tabelize res)]
     (first (vals (first tab)))))
 
@@ -230,7 +283,7 @@
 (defnp run-transaction [steps mps ctr]
   (if (empty? steps)
     [true mps  ctr]
-    (let [;_ (println "working on " mps)
+    (let [;_ (println "working on " steps)
            [n & aparams] (first steps)
            ;_ (if (< (inc ctr) (count mps))
            ;    (println "Redoing: " n "with aparams " aparams  )
@@ -240,7 +293,8 @@
            mps (if new
                  (concat mps (list {:name n :btp 0 :max 0}))
                  mps)
-           btp (:btp (nth mps ctr))]
+           btp (:btp (nth mps ctr))
+          ]
 
 
       (cond (= '__until n)
@@ -341,7 +395,7 @@
                                      ;_ (println ".           [matches remaining after backtracking point (" btp "):" (count mt) "]")])
                                      ]
                                 mt))]
-
+;                (println "MATCHES " (apply str matches))
                 (if (and (not (nil? matches)) (not (true? matches))(zero? (count matches)))
                   (do
                     ;(println ".        [Failure] " [false mps ctr])
@@ -373,12 +427,9 @@
                                   (concat (take (dec (count mps)) mps) (list {:name n :btp 0 :max (dec m)}))
                                   mps)]
                         (run-transaction (rest steps) mps ctr))
-
                       (catch Exception e
-                        (let [msg (.getMessage e)]
-                          (println (str ".      [Failed]: " msg))
-                          (throw e)
-                          [false mps ctr])))))))))))
+                          [false mps ctr]
+                          ))))))))))
 
 (defnp track-back [mps ctr]
   (let [n-ctr (dec ctr)]
@@ -399,14 +450,20 @@
         ;_ (println "mps: " (map (fn [s] [(:name s) (:btp s) (:max s)]) mps))
         ;_ (Thread/sleep 500)
         [res r-mps ctr] (run-transaction steps mps -1)]
-    (if (true? res)
-      (do
+    (if (and (true? res) (no-violations?))
+      (try
         (committx)
-        true)
+        true
+        (catch Exception e
+          (println (str ".      [Failed]: " (.getMessage e)))
+          false))
       (do
         (when (< iter 500)
           (do
-            (rollbacktx)
+            (try
+              (rollbacktx)
+              (catch Exception e)
+              )
             (let [ [n-mps n-ctr] (track-back r-mps ctr)
                    ;_ (println "transaction failed at ctr:" ctr "  !! " r-mps)
                    ;_ (println " new ctr: " n-ctr "  || " n-mps)
@@ -444,6 +501,36 @@
 
 (defn apl [r & pars]
   (vec (concat [r] pars)))
+
+(defn unique [node attr]
+  "DSL form to create a uniqueness constraint"
+  (cy/query conn (str "CREATE CONSTRAINT ON (n:" node ") ASSERT n." attr " IS UNIQUE"))
+  nil)
+
+(defn index [node & attrs]
+  "DSL form to create an index"
+  (cy/query conn (str "CREATE INDEX ON :" node "(" (clojure.string/join "," attrs) ")"))
+  nil)
+
+(defn test [r & par]
+  (let [v (if (empty? par) [r] (concat [r] par))]
+    (fn [] (first (run-transaction (list v) '() -1)))))
+
+(defn declare-violation [msg f]
+    (if (not (f))
+      (do
+        (add-violation! msg f)
+        true)
+      false))
+
+
+(defn nsel [id nodes]
+;  (println (str "ID:" id "   NODES:" (apply str nodes)))
+  (if (= id (-> nodes first :metadata :handle))
+    (-> nodes first)
+    (if (empty? (rest nodes))
+      '()
+      (nsel id (rest nodes)))))
 
 
 (defn node
@@ -614,3 +701,64 @@
   (-> g
       query->dot
       show))
+
+(rule 'any-edge ['l]
+  {:read
+   (pattern
+     (node 's)
+     (node 't)
+     (edge 'e {:label "&l" :src 's :tar 't})
+     )})
+
+(rule 'to-many ['l]
+  {:read
+   (pattern
+     (node 's)
+     (node 't)
+     (edge 'e {:label "&l" :src 's :tar 't})
+     (node 'o)
+     (edge 'f {:label "&l" :src 's :tar 'o})
+     )})
+
+(rule 'from-many ['l]
+  {:read
+   (pattern
+     (node 's)
+     (node 't)
+     (edge 'e {:label "&l" :src 's :tar 't})
+     (node 'o)
+     (edge 'f {:label "&l" :src 'o :tar 't})
+     )})
+
+(defn src-types [e ls]
+  (declare-violation
+    (str "Source nodes of " e " edges should be typed on of " ls)
+    (fn [] (if ((test 'any-edge e))
+             (reduce (fn [b n]
+                       (let [node   (nsel "s" (:nodes n))
+                             label  (-> node :metadata :label)]
+                         (or b (not (some #(= label %) ls )))))
+                     false
+                     (matches))))))
+
+(defn tar-types [e ls]
+  (declare-violation
+    (str "Target nodes of " e " edges should be typed on of " ls)
+    (fn [] (if ((test 'any-edge e))
+             (reduce (fn [b n]
+                       (let [node   (nsel "t" (:nodes n))
+                             label  (-> node :metadata :label)]
+                         (or b (not (some #(= label %) ls )))))
+                     false
+                     (matches))))))
+
+(defn to-one [e]
+  (declare-violation
+    (str "Target node of " e " edges should be unique")
+    (test 'to-many e)))
+
+(defn from-one [e]
+  (declare-violation
+    (str "Source node of " e " edges should be unique")
+    (test 'from-many e)))
+
