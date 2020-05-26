@@ -45,9 +45,6 @@
 (defn add-violation! [msg f]
   (swap! constraints-atom (fn [old] (conj old [msg f]))))
 
-(defn reset-violations! []
-  (swap! constraints-atom  (fn [old] '())))
-
 
 (defn rules []
   (deref rules-atom))
@@ -71,6 +68,11 @@
   (swap! rules-atom (fn [c] (assoc c n s))))
 
 (def conn (nr/connect dburi dbusr dbpw))
+
+
+(defn drop-constraints! []
+  (swap! constraints-atom  (fn [old] '()))
+  (cy/query conn "CALL apoc.schema.assert({}, {})"))
 
 (defn begintx []
   (set-tx (nt/begin-tx conn)))
@@ -652,7 +654,7 @@
   (dorothy/save! (rule->dot r (r (rules))) (str "doc/images/" (name r) ".png") {:format :png}))
 
 (defn document-rules []
-  (map document-rule (rules)))
+  (map document-rule (keys (rules))))
 
 
 (rule 'delete-any-node!
