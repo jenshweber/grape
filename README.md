@@ -480,7 +480,7 @@ Note that the second rule (```train!```) receives the worker node ```w``` as a p
 
 ## Control structures: ```Until```
 
-Sometimes we may need additional control structures in transactions. For example, consider the following graph setup:
+Sometimes we may need additional control structures to direct backtracking in transactions. For example, consider the following graph setup:
 
 ```clojure
 (rule 'setup-likes!
