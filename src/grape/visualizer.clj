@@ -23,7 +23,6 @@
   (deref ctr-atom))
 
 (defn dot->render [g]
-(defn dot->render [g]
   (dorothy/render g {:format :png}))
 
 (defn dot->image [g]
