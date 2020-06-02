@@ -4,9 +4,15 @@
 
 A Clojure library designed to provide support for graph rewriting based on a persistent graph store.
 
-# Quick Start
+# Installation
 
-* **Install Neo4J** Grape requires the graph database Neo4j. (Important: Grape has not been migrated to Neo4J v. 4 yet. Please use the latest v. 3 release.) The community edition (free) can be downloaded here: https://neo4j.com/download/
+## Prerequisites
+
+* **Clojure** (including Leiningen, requires JDK). Eric Normand has written very nice instructions [here](https://purelyfunctional.tv/guide/how-to-install-clojure/)
+* **Neo4J** Grape requires the graph database Neo4j. (Important: Grape has not been migrated to Neo4J v. 4 yet. Please use the latest v. 3 release.) The community edition (free) can be downloaded here: https://neo4j.com/download/
+* **Graphviz** Grape uses Graphviz for visualization. [installation](https://graphviz.gitlab.io/download/)
+
+## Create a Grape project
 * **Create Clojure project** For example with Leiningen ``lein new grapetest``
 * **Add profiles.clj** Create a new file ``profiles.clj`` to contain your neo4j connection info:
 
