@@ -17,6 +17,7 @@ Grape can be installed using a prepared Vagrant VM. This assumes that you have [
 
 ```
   config.vm.network "forwarded_port", guest: 7687, host: 7687
+  config.vm.network "forwarded_port", guest: 7474, host: 7474
   config.vm.network "forwarded_port", guest: 8080, host: 8080
 ```
 
