@@ -31,9 +31,13 @@ You may also want to allocate some additional resources:
 
 * Download and start the VM: `vagrant up`. (This will take some time to download the VM on the first call.)
 
-* SSH into the VM with `vagrant ssh` and start a Grape REPL with `lein gorilla :ip 0.0.0.0 :port 8080`
+* Open a shell at the VM `vagrant ssh` 
+
+* Then `cd grapetest` and start a Grape REPL with `lein gorilla :ip 0.0.0.0 :port 8080`
 
 * Now just navigate to http://0.0.0.0:8080/worksheet.ht?filename=welcome.clj
+
+* You can get the Neo4J browser at http://localhost:7474 (username neo4j, password grape)
 
 ## Slowstart - using a local installation
 
