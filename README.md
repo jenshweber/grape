@@ -2,7 +2,7 @@
 
 # Grape - Graph Rewriting and Persistence Engine 
 
-A Clojure library designed to provide support for graph rewriting based on a persistent graph store.
+Persistent Graph Rewriting for Clojure.
 
 # Installation
 
