@@ -6,6 +6,8 @@ Persistent Graph Rewriting for Clojure.
 
 # Installation
 
+Below is a description of two alternative ways to install Grape. The "Quickstart" way uses a prepared VM (with much of the installation work already done for you), while the "Slowstart" way describes a local installation.
+
 ## Quickstart - using a Vagrant VM image
 
 Grape can be installed using a prepared Vagrant VM. This assumes that you have [Vagrant installed](https://www.vagrantup.com/docs/installation).
