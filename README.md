@@ -35,7 +35,7 @@ You may also want to allocate some additional resources:
 
 * Then `cd grapetest` and start a Grape REPL with `lein gorilla :ip 0.0.0.0 :port 8080`
 
-* Now just navigate to http://0.0.0.0:8080/worksheet.ht?filename=welcome.clj
+* Now just navigate to http://0.0.0.0:8080/worksheet.html?filename=welcome.clj
 
 * You can get the Neo4J browser at http://localhost:7474 (username neo4j, password grape)
 
