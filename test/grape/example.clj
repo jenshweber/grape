@@ -6,6 +6,11 @@
 
 (hello!)
 
+(rule 'lookup ['o]
+  {:read (pattern
+          (node 'n {:oid "&o"}))}
+  )
+
 (rule 'hello-grape!
   {
    :read (pattern
@@ -257,4 +262,4 @@
      (node 't)
      (node 'c)
      (edge 'e1 {:label "parent_of" :src 'g :tar 'p})
-  )
+  ))

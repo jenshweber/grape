@@ -49,12 +49,14 @@
   (let [p (second n)
         name (:id p)
         l (:label p)
+        oid (:oid p)
         as (:asserts p)
         c (if (:merge p) "green4" c)]
     (str " "
          name " [color=" c " shape=record penwidth=bold  " o " "
          "label=\"{"
          name (if (nil? l) "" (str ":" l))
+         (if (nil? oid) "" (str ":OID(" oid ")"))
          (if (:merge p) " (merged)" "")
          (if (empty? as)
            " "

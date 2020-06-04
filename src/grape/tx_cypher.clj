@@ -39,6 +39,11 @@
              (str ":" (resolve-value s l))))
          (asserts->cypher s (:asserts c))
          ") "
+         (if (= m :match)
+           (let [o (:oid c)]
+            (if (nil? o)
+               " where 1=1 "
+               (str " where ID(" nid ")=" (resolve-value s o) " "))))
          )))
 
 (defn edge->cypher [s m e]
@@ -50,7 +55,9 @@
              ""
              (str ":" (resolve-value s l))))
          (asserts->cypher s (:ass c))
-         "]->(" (:tar c) ")")))
+         "]->(" (:tar c) ") "
+         (if (= m :match) "where 1=1 "
+                          ""))))
 
 (defn graphelem->cypher [s m e]
   "Translate a graph element to cipher - either node or edge"
@@ -128,7 +135,7 @@
           (let [ex_eids (keys (:edges excluded))
                 ex_nids (keys (:nodes excluded))]
             (str
-              " WHERE "
+              " AND "
               ; add isomorphism condition
               (if (= :iso sem)
                 (let [st (gen-constraint-isomorphism (concat nids ex_nids) (concat eids ex_eids))]
@@ -174,60 +181,6 @@
    (pattern->cypher scope m p {:nodes '{} :edges '{}})))
 
 
-(defn savepattern->cypher
-  "translate a read graph pattern to cypher matching query"
-  ([scope m p excluded]
-   (let [s (second p)
-         els (:els s)
-         sem (:sem s)
-         c (filter-elem 'cond els)
-         a (filter-elem 'assign els)
-         eids (map get-id (filter-elem 'edge els))
-         nids (map get-id (filter-elem 'node els ))
-         ex_eids (keys (:edges excluded))
-         ex_nids (keys (:nodes excluded))]
-     (if (nil? els)
-       ""
-       (str
-        (reduce (partial str-sep " ") (map (partial graphelem->cypher scope m) els))
-        (if (= m :match)
-          (str
-            " WHERE "
-            ; add isomorphism condition
-            (if (= :iso sem)
-              (let [st (gen-constraint-isomorphism (concat nids ex_nids) (concat eids ex_eids))]
-                (if (empty? st)
-                  ""
-                  (str st " AND ")))
-              "")
-            ; add custom conditions
-            (if (empty? c)
-              "1=1"
-              (second (first c)))
-            ; add graph element id's that have been passed as parameters
-
-            (reduce (partial str-sep " AND ")
-                    ""
-                    (map (fn [i] (str "ID(" i ")=" (scope i)))
-                         (filter (fn [i] (not (nil? (scope i)))) (concat eids nids))))
-
-            (let [rstr (str (ids->return nids) (ids->return eids))
-                  ostr (str (ids->order nids) (ids->order eids))]
-              (str " RETURN " (.substring rstr 1 (count rstr) )
-                   " ORDER BY " (.substring ostr 1 (count ostr) ))))
-
-          ; else (= m :create)
-          (str
-            (if (empty? a)
-              ""
-              (str " SET " (resolve-value scope (second (first a)))))
-
-            (let [rstr (str (ids->return nids) (ids->return eids))]
-              (if (= 0 (count rstr))
-                " RETURN * "
-                (str " RETURN " (.substring rstr 1 (count rstr) ))))))))))
-  ([scope m p]
-   (pattern->cypher scope m p {:nodes '{} :edges '{}})))
 
 
 (defn redex->cypher [r]

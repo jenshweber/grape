@@ -116,7 +116,7 @@
 (defnp dbquery
   ([q p]
    (let [
- ;        _ (println "DBQuery: " q)
+;         _ (println "DBQuery: " q)
          _ (when (nil? (tx)) (begintx))
          res (nt/execute conn (tx) [(nt/statement q)])
          els (:els (second p))
@@ -539,10 +539,11 @@
   "DSL form for specifying a node"
   ([id rest]
    (let [check-syntax (partial check-syntax-generic
-                               (str "NODE   :- ( node ID <PROP> ) \n"
-                                    "PROP   :- { <LABEL> <ASSERT> <MERGE> } \n"
+                               (str "NODE   :- ( node HANDLE <PROP> ) \n"
+                                    "PROP   :- { <LABEL> <ASSERT> <OID> <MERGE> } \n"
                                     "LABEL  :- :label *string* \n"
                                     "ASSERT :- :asserts {KEYVAL*} \n"
+                                    "OID    :- :oid *number*"
                                     "KEYVAL :- KEY *string* \n"
                                     "ID     :- *symbol* \n"
                                     "KEY    :- *keyword* \n"
@@ -697,6 +698,14 @@
        (str/join (map qnode->dot (:nodes r)))
        (str/join (map qedge->dot (:edges r)))
        "}")))
+
+(defn oid [handle]
+  (let [o (-> (deref ret-atom)
+            (keywordize-keys)
+            ((keyword handle)))]
+    (if (nil? o)
+      -1
+      o)))
 
 
 (defn view [g]
