@@ -2,12 +2,54 @@
 
 # Grape - Graph Rewriting and Persistence Engine 
 
-A Clojure library designed to provide support for graph rewriting based on a persistent graph store.
+Persistent Graph Rewriting for Clojure.
 
-# Quick Start
+# Installation
 
-* **Install Neo4J** Grape requires the graph database Neo4j. The community edition (free) can be downloaded here: https://neo4j.com/download/
-* **Create Clojure project** For example with Leiningen ``lein new gapetest``
+Below is a description of two alternative ways to install Grape. The "Quickstart" way uses a prepared VM (with much of the installation work already done for you), while the "Slowstart" way describes a local installation.
+
+## Quickstart - using a Vagrant VM image
+
+Grape can be installed using a prepared Vagrant VM. This assumes that you have [Vagrant installed](https://www.vagrantup.com/docs/installation).
+
+* Download and initialize the VM with `vagrant init jenshweber/grape`
+* Edit the `Vagrantfile` that was created by adding these port forwards: (feel free to forward to a different port if these ports collide with existing ones)
+
+```
+  config.vm.network "forwarded_port", guest: 7687, host: 7687
+  config.vm.network "forwarded_port", guest: 7474, host: 7474
+  config.vm.network "forwarded_port", guest: 8080, host: 8080
+```
+
+You may also want to allocate some additional resources:
+
+```
+  config.vm.provider "virtualbox" do |vb|
+    vb.memory = "4096"
+    vb.cpus = "3"
+  end
+```
+
+* Download and start the VM: `vagrant up`. (This will take some time to download the VM on the first call.)
+
+* Open a shell at the VM `vagrant ssh` 
+
+* Then `cd grapetest` and start a Grape REPL with `lein gorilla :ip 0.0.0.0 :port 8080`
+
+* Now just navigate to http://0.0.0.0:8080/worksheet.html?filename=welcome.clj
+
+* You can get the Neo4J browser at http://localhost:7474 (username neo4j, password grape)
+
+## Slowstart - using a local installation
+
+### Prerequisites
+
+* **Clojure** (including Leiningen, requires JDK). Eric Normand has written very nice instructions [here](https://purelyfunctional.tv/guide/how-to-install-clojure/)
+* **Neo4J** Grape requires the graph database Neo4j. (Important: Grape has not been migrated to Neo4J v. 4 yet. Please use the latest v. 3 release.) The community edition (free) can be downloaded here: https://neo4j.com/download/
+* **Graphviz** Grape uses Graphviz for visualization. [installation](https://graphviz.gitlab.io/download/)
+
+### Create a Grape project
+* **Create Clojure project** For example with Leiningen ``lein new grapetest``
 * **Add profiles.clj** Create a new file ``profiles.clj`` to contain your neo4j connection info:
 
 ```clojure
