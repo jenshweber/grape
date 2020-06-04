@@ -6,7 +6,7 @@ Persistent Graph Rewriting for Clojure.
 
 # News
 
-* Release 0.1.0 - added mechanism to "pass on" nodes from one rule to another
+* Release 0.1.1 - added mechanism to "pass on" nodes from one rule to another
 
 # Installation
 
