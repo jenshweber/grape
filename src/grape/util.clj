@@ -24,4 +24,6 @@
 
 (defn random-id []
   (symbol
-    ((generate "ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz") 10)))
+    (str "_"
+      ((generate "ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz") 10))))
+

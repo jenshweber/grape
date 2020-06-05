@@ -1,8 +1,8 @@
 (use 'grape.core)
 
 (rule 'hello!
-  {:create (pattern
-             (node 'n1 {:label "Hello"}))})
+  :create (pattern
+             (node :label "Hello")))
 
 (hello!)
 
@@ -12,12 +12,11 @@
   )
 
 (rule 'hello-grape!
-  {
    :read (pattern
-           (node 'n1 {:label "Hello"}))
+           (node 'n1 :label "Hello"))
    :create (pattern
-             (node 'n2 {:label "Grape"})
-             (edge 'e {:label "to" :src 'n1 :tar 'n2}))})
+             (node 'n2 :label "Grape")
+             (edge 'e :label "to" :src 'n1 :tar 'n2)))
 
 (hello-grape!)
 

@@ -99,7 +99,10 @@
           false)))))
 
 (defn no-violations? []
-  (no-violations-iter (deref constraints-atom)))
+  (let [lrbuf (deref last-match-atom)
+        r  (no-violations-iter (deref constraints-atom))]
+        (swap! last-match-atom (fn [_] lrbuf))
+        r))
 
 
 (defn sort-graph-elms [x nids eids]
@@ -134,7 +137,6 @@
   ([q]
    (dbquery q '())))
 
-;(str/join (map (fn [k v] (str " (" k ")  where ID(" k ")=" v " ") {"s" 168, "t" 245})))
 
 (defn query-match [i]
   (let [qn (str
@@ -535,44 +537,64 @@
       (nsel id (rest nodes)))))
 
 
-(defn node
+(defn node-os
   "DSL form for specifying a node"
-  ([id rest]
+  [id rest]
    (let [check-syntax (partial check-syntax-generic
-                               (str "NODE   :- ( node HANDLE <PROP> ) \n"
-                                    "PROP   :- { <LABEL> <ASSERT> <OID> <MERGE> } \n"
+                               (str "NODE   :- ( node <HANDLE> <PROP> ) \n"
+                                    "PROP   :-  <LABEL> <ASSERT> <OID> <MERGE>  \n"
                                     "LABEL  :- :label *string* \n"
                                     "ASSERT :- :asserts {KEYVAL*} \n"
                                     "OID    :- :oid *number*"
                                     "KEYVAL :- KEY *string* \n"
-                                    "ID     :- *symbol* \n"
+                                    "HANDLE :- *symbol* \n"
                                     "KEY    :- *keyword* \n"
                                     "MERGE  :- :merge true | false"))]
-     (check-syntax (symbol? id) "ID should be a symbol."))
+     (check-syntax (symbol? id) "HANDLE should be a symbol."))
    ['node (assoc rest :id id)])
-  ([id]
-   (node id {})))
 
-(defn edge
+(defn node [& args]
+  (let [handle (if (even? (count args))
+                 (symbol (random-id))
+                 (first args))
+        r      (if (even? (count args))
+                 args
+                 (rest args))]
+
+    (node-os handle (zipmap (take-nth 2 r)
+                          (take-nth 2 (rest r))))))
+
+(defn edge-os
   "DSL form for specifying an edge"
   [id rest]
   (let [check-syntax (partial check-syntax-generic
                               (str "(Problem with edg-id " id ") \n"
-                                   "EDGE   :- ( edge ID <PROP> ) \n"
-                                   "PROP   :- { <LABEL> <ASSERT> :src ID :tar ID } \n"
-                                   "LABEL  :- :label L \n"
-                                   "ASSERT :- :asserts {KEYVAL*} \n"
-                                   "KEYVAL :- KEY VALUE \n"
-                                   "ID     :- *symbol* \n"
-                                   "KEY    :- *keyword* \n"
-                                   "L,VALUE:- *symbol* | *string*\n"))]
+                                   "EDGE     :- ( edge <HANDLE> <LABEL> LOCATION <ASSERTS>) \n"
+                                   "LOCATION :-  :src ID :tar ID  \n"
+                                   "LABEL    :- :label L \n"
+                                   "ASSERT   :- :asserts {KEYVAL*} \n"
+                                   "KEYVAL   :- KEY VALUE \n"
+                                   "HANDLE   :- *symbol* \n"
+                                   "KEY      :- *keyword* \n"
+                                   "L,VALUE  :- *symbol* | *string*\n"))]
     (check-syntax (symbol? id) "edge ID should be a symbol.")
-    (check-syntax (valid-schema {(s/optional-key :label) (s/either s/Symbol s/Str)
-                                 :src s/Symbol
-                                 :tar s/Symbol
-                                 (s/optional-key :asserts) {s/Keyword (s/either s/Symbol s/Str)}}
-                                rest) ""))
+  ;  (check-syntax (valid-schema {(s/optional-key :label) (s/either s/Symbol s/Str)
+  ;                               :src s/Symbol
+  ;                               :tar s/Symbol
+  ;                               (s/optional-key :asserts) {s/Keyword (s/either s/Symbol s/Str)}}
+  ;                              rest) "")
+    )
   ['edge (assoc rest :id id)])
+
+(defn edge [& args]
+  (let [handle (if (even? (count args))
+                 (symbol (random-id))
+                 (first args))
+        r      (if (even? (count args))
+                 args
+                 (rest args))]
+    (edge-os handle (zipmap (take-nth 2 r)
+                          (take-nth 2 (rest r))))))
 
 (defn pattern
   "DSL form for specifying a graph patterns"
@@ -618,15 +640,16 @@
           r (if (number? f) (rest xs) xs)]
       ['NAC id (apply pattern r)])))
 
-(defn rule
+(defn rule-os
   "DSL form for specifying a graph transformation"
-  ([n params prop]
+  [n params prop]
    (let [check-syntax (partial check-syntax-generic
-                               (str "RULE          :- ( rule NAME <[PAR+]> { <:theory 'spo|'dpo> <:read PATTERN> <:delete [ID+]> <:create PATTERN> } ) \n"
+                               (str "RULE          :- ( rule NAME <[PAR+]>  <:theory 'spo|'dpo> <:read PATTERN> <:delete [ID+]> <:create PATTERN>  ) \n"
                                     "NAME, PAR, ID :- *symbol* \n"
                                     "PATTERN       := (pattern ...)"))]
      (check-syntax (symbol? n) "rule name must be a symbol")
-     (check-syntax (valid-schema [s/Symbol] params) "rule parameter list must be sequence of symbols")
+     (if (not (empty? params))
+       (check-syntax (valid-schema [s/Symbol] params) "rule parameter list must be sequence of symbols"))
      (check-syntax (subset? (set (keys prop)) #{:read :delete :create :theory}) "unknown part of rule. Rules can only have :theory :read, :delete and :create parts")
      (if (contains? prop :read) (check-syntax (= 'pattern (first (:read prop))) "'read' part of rule must contain a pattern"))
      (if (contains? prop :create) (check-syntax (= 'pattern (first (:create prop))) "'create' part of rule must contain a pattern"))
@@ -645,8 +668,13 @@
        (intern *ns* (symbol (str (name n) "-dot")) (fn [] (rule->dot n s)))
        ((intern *ns* (symbol (str (name n) "-show")) (fn [] (show (rule->dot n s)))))
        )))
-  ([n prop]
-   (rule n [] prop)))
+
+(defn rule [n & args]
+  (if (even? (count args))
+    (rule-os n [] (zipmap (take-nth 2 args)
+                        (take-nth 2 (rest args))))
+    (rule-os n (first args) (zipmap (take-nth 2 (rest args))
+                                  (take-nth 2 (rest (rest args)))))))
 
 
 
@@ -657,13 +685,12 @@
 (defn document-rules []
   (map document-rule (keys (rules))))
 
+  (rule 'delete-any-node!
+    :read (pattern (node 'n))
+    :delete ['n])
 
-(rule 'delete-any-node!
-      {:read (pattern (node 'n))
-       :delete ['n]})
-
-(defn clear! []
-  (while (delete-any-node!)))
+  (defn clear! []
+    (while (delete-any-node!)))
 
 
 
@@ -713,63 +740,63 @@
       query->dot
       show))
 
-(rule 'any-edge ['l]
-  {:read
-   (pattern
-     (node 's)
-     (node 't)
-     (edge 'e {:label "&l" :src 's :tar 't})
-     )})
 
-(rule 'to-many ['l]
-  {:read
-   (pattern
-     (node 's)
-     (node 't)
-     (edge 'e {:label "&l" :src 's :tar 't})
-     (node 'o)
-     (edge 'f {:label "&l" :src 's :tar 'o})
-     )})
+  (rule 'any-edge ['l]
+    :read
+    (pattern
+      (node 's)
+      (node 't)
+      (edge 'e :label "&l" :src 's :tar 't)
+      ))
 
-(rule 'from-many ['l]
-  {:read
-   (pattern
-     (node 's)
-     (node 't)
-     (edge 'e {:label "&l" :src 's :tar 't})
-     (node 'o)
-     (edge 'f {:label "&l" :src 'o :tar 't})
-     )})
+  (rule 'to-many ['l]
+    :read
+    (pattern
+      (node 's)
+      (node 't)
+      (edge 'e :label "&l" :src 's :tar 't)
+      (node 'o)
+      (edge 'f :label "&l" :src 's :tar 'o)
+      ))
 
-(defn src-types [e ls]
-  (declare-violation
-    (str "Source nodes of " e " edges should be typed on of " ls)
-    (fn [] (if ((test 'any-edge e))
-             (reduce (fn [b n]
-                       (let [node   (nsel "s" (:nodes n))
-                             label  (-> node :metadata :label)]
-                         (or b (not (some #(= label %) ls )))))
-                     false
-                     (matches))))))
+  (rule 'from-many ['l]
+    :read
+    (pattern
+      (node 's)
+      (node 't)
+      (edge 'e :label "&l" :src 's :tar 't)
+      (node 'o)
+      (edge 'f :label "&l" :src 'o :tar 't)
+      ))
 
-(defn tar-types [e ls]
-  (declare-violation
-    (str "Target nodes of " e " edges should be typed on of " ls)
-    (fn [] (if ((test 'any-edge e))
-             (reduce (fn [b n]
-                       (let [node   (nsel "t" (:nodes n))
-                             label  (-> node :metadata :label)]
-                         (or b (not (some #(= label %) ls )))))
-                     false
-                     (matches))))))
+  (defn src-types [e ls]
+    (declare-violation
+      (str "Source nodes of " e " edges should be typed on of " ls)
+      (fn [] (if ((test 'any-edge e))
+               (reduce (fn [b n]
+                         (let [node (nsel "s" (:nodes n))
+                               label (-> node :metadata :label)]
+                           (or b (not (some #(= label %) ls)))))
+                       false
+                       (matches))))))
 
-(defn to-one [e]
-  (declare-violation
-    (str "Target node of " e " edges should be unique")
-    (test 'to-many e)))
+  (defn tar-types [e ls]
+    (declare-violation
+      (str "Target nodes of " e " edges should be typed on of " ls)
+      (fn [] (if ((test 'any-edge e))
+               (reduce (fn [b n]
+                         (let [node (nsel "t" (:nodes n))
+                               label (-> node :metadata :label)]
+                           (or b (not (some #(= label %) ls)))))
+                       false
+                       (matches))))))
 
-(defn from-one [e]
-  (declare-violation
-    (str "Source node of " e " edges should be unique")
-    (test 'from-many e)))
+  (defn to-one [e]
+    (declare-violation
+      (str "Target node of " e " edges should be unique")
+      (test 'to-many e)))
 
+  (defn from-one [e]
+    (declare-violation
+      (str "Source node of " e " edges should be unique")
+      (test 'from-many e)))

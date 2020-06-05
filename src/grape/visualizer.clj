@@ -47,15 +47,16 @@
 
 (defn node->dot [n c o]
   (let [p (second n)
-        name (:id p)
+        handle (name (:id p))
+        dhandle (if (str/starts-with? handle "_") "_" handle)
         l (:label p)
         oid (:oid p)
         as (:asserts p)
         c (if (:merge p) "green4" c)]
     (str " "
-         name " [color=" c " shape=record penwidth=bold  " o " "
+         handle " [color=" c " shape=record penwidth=bold  " o " "
          "label=\"{"
-         name (if (nil? l) "" (str ":" l))
+         dhandle (if (nil? l) "" (str ":" l))
          (if (nil? oid) "" (str ":OID(" oid ")"))
          (if (:merge p) " (merged)" "")
          (if (empty? as)
@@ -139,7 +140,7 @@
         c (:create rule)
         p (:params rule)]
     (str "digraph g {  splines=true overlap=false subgraph cluster0 {"
-         "label=\"Rule: " n (str p)\";"
+         "label=\"Rule: " n (if (empty? p) "" (str p)) "\";"
          (pattern->dot r d "black" "red" "")
          (pattern->dot c [] "green" "green" "")
          "}}")))
