@@ -4,6 +4,10 @@
 
 Persistent Graph Rewriting for Clojure.
 
+# News
+
+* Release 0.1.1 - added mechanism to "pass on" nodes from one rule to another
+
 # Installation
 
 Below is a description of two alternative ways to install Grape. The "Quickstart" way uses a prepared VM (with much of the installation work already done for you), while the "Slowstart" way describes a local installation.
