@@ -42,8 +42,8 @@
   "Translate a map of assertions to Dot"
   (if (empty? as)
     ""
-    (str (reduce (partial str-sep "\n") (map (fn [[k v]]
-                                               (str (name k) "=" v )) as)))))
+    (str/join "; " (map (fn [[k v]]
+                          (str (name k) "=" v )) as))))
 
 (defn node->dot [n c o]
   (let [p (second n)
@@ -72,7 +72,6 @@
         l (:label p)
         as (:asserts p)]
     (str " " src " -> " tar
-  ;       " [color=" c " penwidth=bold len=2 constraint=false fontcolor=" c " " o
           " [color=" c " penwidth=bold len=2  fontcolor=" c " " o
          " label=\"" l
          (if (empty? as)
@@ -80,6 +79,15 @@
            (str "\n{" (asserts->dot as) "}"))
          "\" ]"
          )))
+
+(defn path->dot [e c o]
+  (let [p (second e)
+        src (name (:src p))
+        tar (name (:tar p))]
+    (str " " src " -> " tar
+         " [color=\"black:invis:black\" len=8 fontcolor=" c " " o
+         " label=\"" (or (:min p) 1) ".." (or (:max p) "*\" ]"
+         ))))
 
 (declare pattern->dot)
 
@@ -114,6 +122,7 @@
     (cond
       (= 'node t) (node->dot e c o)
       (= 'edge t) (edge->dot e c o)
+      (= 'path t) (path->dot e c o)
       (= 'NAC t) (NAC->dot e)
       (= 'cond t) (cond->dot e)
       (= 'assign t) (assign->dot e)

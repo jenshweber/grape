@@ -59,12 +59,19 @@
          (if (= m :match) "where 1=1 "
                           ""))))
 
+(defn path->cypher [e]
+  (let [c (second e)
+        k  " MATCH"]
+    (str k " (" (:src c) ")-[*" (or (:min c) 1) ".." (or (:max c) "")
+         "]->(" (:tar c) ") where 1=1 ")))
+
 (defn graphelem->cypher [s m e]
   "Translate a graph element to cipher - either node or edge"
   (let [t (first e)]
     (cond
       (= 'node t) (node->cypher s m e)
       (= 'edge t) (edge->cypher s m e)
+      (= 'path t) (path->cypher e)
       (= 'NAC t) ""
       (= 'cond t) ""
       (= 'assign t) ""

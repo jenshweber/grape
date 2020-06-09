@@ -1,4 +1,4 @@
-(defproject leadlab/grape "0.2.0"
+(defproject leadlab/grape "0.2.1"
   :description "Graph Rewriting And Persistence Engine"
   :url "http://jenshweber.github.io/grape/"
   :license {:name "Eclipse Public License"
@@ -19,4 +19,9 @@
             [org.clojars.benfb/lein-gorilla "0.6.0"]]
   :profiles {:dev {}}
   :jvm-opts ["-Xmx1g" "-server"]
+  :deploy-repositories [["clojars" {
+                                    :url "https://clojars.org/repo"
+                                    :username :env/clojars_user
+                                    :password  :env/clojars_pass
+                                    :sign-releases false}]]
 )

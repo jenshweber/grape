@@ -596,6 +596,13 @@
     (edge-os handle (zipmap (take-nth 2 r)
                           (take-nth 2 (rest r))))))
 
+(defn path
+  "DSL form for specifying an edge"
+  [& args]
+  (let [argmap  (zipmap (take-nth 2 args)
+                       (take-nth 2 (rest args)))]
+    ['path argmap]))
+
 (defn pattern
   "DSL form for specifying a graph patterns"
   [& xs]
@@ -608,7 +615,7 @@
           r (if (keyword? f) (rest xs) xs)
           m (if (= f :homo) :homo :iso)]
       (if (symbol? f) (check-syntax (valid-schema (s/either :homo :iso) f) "MTYPE must be :iso or :homo") )
-      (check-syntax (valid-children #{'node 'edge 'NAC 'cond 'assign} r) "ELEM must be node, edge, NAC, condition or set")
+      (check-syntax (valid-children #{'node 'edge 'NAC 'cond 'assign 'path} r) "ELEM must be node, edge, NAC, condition, assign, or path")
       ['pattern {:sem m :els r}])))
 
 
@@ -705,7 +712,7 @@
        (if (empty? (:data n))
          " "
          " | ")
-       (str/join (map qnodedata->dot (:data n)))
+       (str/join "; " (map qnodedata->dot (:data n)))
        "\"] "
   ))
 
@@ -740,6 +747,16 @@
       query->dot
       show))
 
+(rule 'any-connected-node?
+  :read (pattern :homo
+                 (node 'n)
+                 (node 'm)
+                 (edge :src 'n :tar 'm)
+                 ))
+
+(rule 'any-node?
+  :read (pattern
+                 (node 'n)))
 
   (rule 'any-edge ['l]
     :read
