@@ -119,7 +119,7 @@
 (defnp dbquery
   ([q p]
    (let [
-;         _ (println "DBQuery: " q)
+ ;        _ (println "DBQuery: " q)
          _ (when (nil? (tx)) (begintx))
          res (nt/execute conn (tx) [(nt/statement q)])
          els (:els (second p))
@@ -599,9 +599,11 @@
 (defn path
   "DSL form for specifying an edge"
   [& args]
-  (let [argmap  (zipmap (take-nth 2 args)
-                       (take-nth 2 (rest args)))]
-    ['path argmap]))
+  (let [exp    (first args)
+        r      (rest args)
+        argmap  (zipmap (take-nth 2 r)
+                        (take-nth 2 (rest r)))]
+    ['path (assoc argmap :exp exp)]))
 
 (defn pattern
   "DSL form for specifying a graph patterns"

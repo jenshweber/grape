@@ -62,8 +62,15 @@
 (defn path->cypher [e]
   (let [c (second e)
         k  " MATCH"]
-    (str k " (" (:src c) ")-[*" (or (:min c) 1) ".." (or (:max c) "")
-         "]->(" (:tar c) ") where 1=1 ")))
+    (str k " (" (:src c) ")"
+         (str/join "()" (map (fn [s]
+                          (let [dir (subs s 0 0)
+                                seg (subs s 1 (count s))]
+                            (cond (= dir ">") (str "-[" seg "]->")
+                                  (= dir "<") (str "<-[" seg "]-")
+                                  :else (str "-[" seg "]-"))))
+                          (str/split (:exp c) #" ")))
+         "(" (:tar c) ") where 1=1 ")))
 
 (defn graphelem->cypher [s m e]
   "Translate a graph element to cipher - either node or edge"

@@ -86,7 +86,7 @@
         tar (name (:tar p))]
     (str " " src " -> " tar
          " [color=\"black:invis:black\" len=8 fontcolor=" c " " o
-         " label=\"" (or (:min p) 1) ".." (or (:max p) "*") "\" ]"
+         " label=\"" (:exp p) "\" ]"
          )))
 
 (declare pattern->dot)
