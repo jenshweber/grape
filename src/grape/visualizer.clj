@@ -43,7 +43,10 @@
   (if (empty? as)
     ""
     (str/join "; " (map (fn [[k v]]
-                          (str (name k) "=" v )) as))))
+                          (str (name k) "=" (if (str/starts-with? v "&")
+                                              (subs v 1 (count v) )
+                                              v)))
+                               as))))
 
 (defn node->dot [n c o]
   (let [p (second n)
@@ -135,10 +138,14 @@
 (defn pattern->dot
   "translate a graph pattern to dot"
   [p d c1 c2 o]
-  (let [els (:els (second p))]
+  (let [m    (second p)
+        els  (:els m)
+        flag (if (= :iso (:sem m))
+               (str (random-id) " [color=\".7 .3 1.0\" shape=round style=filled label=\"ISO\"] " ""))]
     (if (nil? els)
       ""
-      (reduce str (map (partial graphelem->dot d c1 c2 o) els)))))
+      (str flag (reduce str (map (partial graphelem->dot d c1 c2 o) els))))))
+
 
 (defn rule->dot [rid rule]
   "translate a rule to dot"

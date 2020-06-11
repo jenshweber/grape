@@ -14,7 +14,7 @@
     [grape.tx-cypher :refer :all]
     [environ.core :refer [env]]
     [taoensso.timbre :as timbre
-     :refer (log trace debug info warn error fatal report
+     :refer (log trace info warn error fatal report
                  logf tracef debugf infof warnf errorf fatalf reportf
                  spy get-env log-env)]
     [taoensso.timbre.profiling :as profiling
@@ -37,6 +37,19 @@
 (def last-match-atom (atom '()))
 (def constraints-atom (atom '()))
 (def tx-atom (atom nil))
+
+(def debug-atom (atom false))
+
+(defn debug [b]
+  (swap! debug-atom (fn [_] b)))
+
+(defn debug? []
+  (deref debug-atom))
+
+(defn debug [f & s]
+  (if (debug?)
+    (apply f s)))
+
 
 (defn tx [] (deref tx-atom))
 
@@ -119,7 +132,7 @@
 (defnp dbquery
   ([q p]
    (let [
- ;        _ (println "DBQuery: " q)
+         _ (debug println "DBQuery: " q)
          _ (when (nil? (tx)) (begintx))
          res (nt/execute conn (tx) [(nt/statement q)])
          els (:els (second p))
@@ -169,7 +182,8 @@
                                          i
                                          )))
                  (first)
-                 (map (fn [i] {:metadata {:id (-> i :metadata :id)
+                 (map (fn [i] {:data (:data i)
+                               :metadata {:id (-> i :metadata :id)
                                           :handle (-> i :handle)
                                           :label (-> i :metadata :type)}
                                :start (-> i :start (str/split #"/") last)
@@ -250,8 +264,6 @@
           (match-nacs m s (rest nacs))
           true)))))
 
-;(defn rule-exists? [n]
-;  (not (empty? (:rules gragra n))))
 
 (defnp check [ms s nacs]
   "check nacs in context of prior matches"
@@ -615,7 +627,7 @@
                                     "ELEM    :- (node ...) | (edge ...) | (NAC ...) | (condition ...) | (assign ...)"))]
     (let [f (first xs)
           r (if (keyword? f) (rest xs) xs)
-          m (if (= f :homo) :homo :iso)]
+          m (if (= f :iso) :iso :homo)]
       (if (symbol? f) (check-syntax (valid-schema (s/either :homo :iso) f) "MTYPE must be :iso or :homo") )
       (check-syntax (valid-children #{'node 'edge 'NAC 'cond 'assign 'path} r) "ELEM must be node, edge, NAC, condition, assign, or path")
       ['pattern {:sem m :els r}])))
@@ -705,7 +717,7 @@
 
 
 
-(defn qnodedata->dot [[k v]]
+(defn qdata->dot [[k v]]
   (str (name k) "='" v "'"))
 
 (defn qnode->dot [n]
@@ -714,7 +726,7 @@
        (if (empty? (:data n))
          " "
          " | ")
-       (str/join "; " (map qnodedata->dot (:data n)))
+       (str/join "; " (map qdata->dot (:data n)))
        "\"] "
   ))
 
@@ -722,18 +734,23 @@
   (str " n" (-> e :start)
        " -> "
        " n" (-> e :end)
-       " [label=\"" (-> e :metadata :label) "\"] "
+       " [label=\"" (-> e :metadata :label)
+       " "
+       (str/join "; " (map qdata->dot (:data e)))
+       "\"] "
        ))
 
 (defn query->dot [g]
-  (let [r (if (map? g)
+  (if (empty? g)
+    "digraph L {} "
+   (let [r (if (map? g)
             g
             (reduce (fn [m n] (merge-with concat m n))  g)
             )]
-    (str "digraph L {   rankdir=LR; node [shape=Mrecord]; "
+      (str "digraph L {   rankdir=LR; node [shape=Mrecord]; "
        (str/join (map qnode->dot (:nodes r)))
        (str/join (map qedge->dot (:edges r)))
-       "}")))
+       "}"))))
 
 (defn oid [handle]
   (let [o (-> (deref ret-atom)
@@ -749,14 +766,16 @@
       query->dot
       show))
 
-(rule 'any-connected-node?
+(def diagram show)
+
+(rule 'any-connected?
   :read (pattern :homo
                  (node 'n)
                  (node 'm)
                  (edge :src 'n :tar 'm)
                  ))
 
-(rule 'any-node?
+(rule 'any?
   :read (pattern
                  (node 'n)))
 
@@ -770,7 +789,7 @@
 
   (rule 'to-many ['l]
     :read
-    (pattern
+    (pattern :iso
       (node 's)
       (node 't)
       (edge 'e :label "&l" :src 's :tar 't)
@@ -780,7 +799,7 @@
 
   (rule 'from-many ['l]
     :read
-    (pattern
+    (pattern :iso
       (node 's)
       (node 't)
       (edge 'e :label "&l" :src 's :tar 't)

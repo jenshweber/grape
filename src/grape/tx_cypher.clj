@@ -54,7 +54,7 @@
            (if (nil? l)
              ""
              (str ":" (resolve-value s l))))
-         (asserts->cypher s (:ass c))
+         (asserts->cypher s (:asserts c))
          "]->(" (:tar c) ") "
          (if (= m :match) "where 1=1 "
                           ""))))
