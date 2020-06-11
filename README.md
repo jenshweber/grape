@@ -6,6 +6,8 @@ Persistent Graph Rewriting for Clojure.
 
 # News
 
+* Release 0.2.4 - Edge attributes are now supported; homomorphic pattern matching is now default
+
 * Release 0.2.3 - Path expressions added
 
 * Release 0.2 - Syntax simplification. Removed the need for a lot of curly braces in Grape rules. Also, node and edge handles are optional now. Makes rules simpler.
