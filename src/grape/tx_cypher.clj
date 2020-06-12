@@ -25,10 +25,23 @@
     ))
 
 
+(def opt-atom (atom true))
+
+(defn first-optional? []
+  (let [r (deref opt-atom)]
+    (swap! opt-atom (fn [_] false))
+    r))
+
+(defn opt-reset! []
+  (swap! opt-atom (fn [_] true)))
 
 (defn node->cypher [s m n]
   (let [c (second n)
-        k (if (= m :match) " MATCH"
+        k (if (= m :match) (if (:opt c) (if (first-optional?)
+                                          " OPTIONAL MATCH"
+                                          " , "
+                                          )
+                                        " MATCH")
                            (if (:merge c) " MERGE"
                                           " CREATE"))
         nid (:id c)]
@@ -42,22 +55,33 @@
          (if (= m :match)
            (let [o (:oid c)]
             (if (nil? o)
-               " where 1=1 "
+;               " where 1=1 "
+" "
                (str " where ID(" nid ")=" (resolve-value s o) " "))))
          )))
 
 (defn edge->cypher [s m e]
   (let [c (second e)
-        k (if (= m :match) " MATCH" " MERGE")]
-    (str k " (" (:src c) ")-[" (:id c)
+        k (if (= m :match) (if (:opt c) (if (first-optional?)
+                                          " OPTIONAL MATCH"
+                                          " , "
+                                          )
+                                        " MATCH")
+                           " MERGE")]
+    (str
+;      (if (= m :match)
+;        (str " WITH " (:src c) "," (:tar c))
+;        "")
+      k " (" (:src c) ")-[" (:id c)
          (let [l (:label c)]
            (if (nil? l)
              ""
              (str ":" (resolve-value s l))))
          (asserts->cypher s (:asserts c))
          "]->(" (:tar c) ") "
-         (if (= m :match) "where 1=1 "
-                          ""))))
+;         (if (= m :match) "where 1=1 "
+;                          "" )
+    )))
 
 (defn path->cypher [e]
   (let [c (second e)
@@ -124,7 +148,6 @@
 
 
 
-
 (defn pattern->cypher
   "translate a read graph pattern to cypher matching query.
   1) scope: provides the actual parameterlist
@@ -132,6 +155,7 @@
   3) p: is the actual pattern
   4) excluded: list of nodes and edges that are excluded from the match"
   ([scope m p excluded]
+   (opt-reset!)
    (let [s (second p)
          els (:els s)
          sem (:sem s)
@@ -145,11 +169,13 @@
        ""
        (str
         (reduce (partial str-sep " ") (map (partial graphelem->cypher scope m) els))
+
         (if (= m :match)
           (let [ex_eids (keys (:edges excluded))
                 ex_nids (keys (:nodes excluded))]
+;            (opt-reset!)
             (str
-              " AND "
+              " WITH * WHERE 1=1 AND "
               ; add isomorphism condition
               (if (= :iso sem)
                 (let [st (gen-constraint-isomorphism (concat nids ex_nids) (concat eids ex_eids))]
@@ -200,9 +226,20 @@
 (defn redex->cypher [r]
   "recall a redex by node and edge IDs"
   (let [nodes (:nodes r)
-        edges (:edges r)]
+        edges (:edges r)
+        ]
     (str
-     (reduce str (map (fn [[n i]] (str " MATCH (" n ") WHERE id(" n ")=" i " ")) nodes))
-     (reduce str (map (fn [[e i]] (str " MATCH ()-[" e "]->() WHERE id(" e ")=" i " ")) edges)))))
+     (reduce str (map (fn [[n i]]
+                        (if (number? i)
+                          (str "  MATCH (" n ") WHERE id(" n ")=" i " ")
+                          (str "  OPTIONAL MATCH (" n ") WHERE id(" n ")= -1 ")
+                          )) nodes))
+     (reduce str (map (fn [[e i]]
+                        (if (number? i)
+                          (str "  MATCH ()-[" e "]->() WHERE id(" e ")=" i " ")
+                          (str "  OPTIONAL MATCH ()-[" e "]->() WHERE id(" e ")= -1 ")
+                          )) edges))
+             )))
+
 
 

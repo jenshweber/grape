@@ -55,13 +55,16 @@
         l (:label p)
         oid (:oid p)
         as (:asserts p)
-        c (if (:merge p) "green4" c)]
+        o (if (:opt p) " style=dashed "
+                       (if (:merge p)
+                         " style=diagonals "
+                         o))
+        ]
     (str " "
          handle " [color=" c " shape=record penwidth=bold  " o " "
          "label=\"{"
          dhandle (if (nil? l) "" (str ":" l))
          (if (nil? oid) "" (str ":OID(" oid ")"))
-         (if (:merge p) " (merged)" "")
          (if (empty? as)
            " "
            (str " | " (asserts->dot as)))
@@ -73,7 +76,8 @@
         src (name (:src p))
         tar (name (:tar p))
         l (:label p)
-        as (:asserts p)]
+        as (:asserts p)
+        o (if (:opt p) " style=dashed " o)]
     (str " " src " -> " tar
           " [color=" c " penwidth=bold len=2  fontcolor=" c " " o
          " label=\"" l
@@ -100,7 +104,7 @@
   (let [nacid (second nac)
         c (nth '("blue" "darkviolet" "brown" "dimgrey") nacid)
         p (nth nac 2)]
-    (pattern->dot p [] c c " style=dashed ")))
+    (pattern->dot p [] c c " style=filled arrowhead=normalicurvecurve ")))
 
 (defn cond->dot
   "translate a condition to dot"

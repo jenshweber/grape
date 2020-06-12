@@ -40,7 +40,7 @@
 
 (def debug-atom (atom false))
 
-(defn debug [b]
+(defn debug! [b]
   (swap! debug-atom (fn [_] b)))
 
 (defn debug? []
@@ -152,16 +152,28 @@
 
 
 (defn query-match [i]
-  (let [qn (str
-             (reduce-kv (fn [s k v] (str s " MATCH (" k ")  where ID(" k ")=" v " ")) "" (:nodes i))
+  (let [
+;        _ (println i)
+        qn (str
+             (reduce-kv (fn [s k v]
+                          (if (number? v)
+                            (str s " MATCH (" k ")  where ID(" k ")=" v " ")
+                            s))
+                          "" (:nodes i))
              " return *")
         qe  (str
-             (reduce-kv (fn [s k v] (str s " MATCH ()-[" k "]->()  where ID(" k ")=" v " ")) "" (:edges i))
+             (reduce-kv (fn [s k v]
+                          (if (number? v)
+                            (str s " MATCH ()-[" k "]->()  where ID(" k ")=" v  " ")
+                            s)
+                            ) "" (:edges i))
              " return *")
-;        _ (println "QN: " qn)
-;        _ (println "QE: " qe)
+ ;       _ (println "QN: " qn)
+ ;       _ (println "QE: " qe)
         ]
-    {:nodes (->> (keywordize-keys (cy/tquery conn qn))
+    {:nodes (if (= qn  " return *")
+              '()
+              (->> (keywordize-keys (cy/tquery conn qn))
                  (map (fn [i] (reduce-kv (fn [s k v]
                                           (conj s (assoc v :handle (name k))))
                                           '()
@@ -172,10 +184,10 @@
                                :metadata {:id (-> i :metadata :id)
                                           :handle (-> i :handle)
                                           :label (-> i :metadata :labels first)}
-                               })))
-     :edges (if (empty? (:edges i))
+                               }))))
+     :edges (if (= qe  " return *")
               '()
-            (->> (keywordize-keys (cy/tquery conn qe))
+             (->> (keywordize-keys (cy/tquery conn qe))
                  (map (fn [i] (reduce-kv (fn [s k v]
                                            (conj s (assoc v :handle (name k))))
                                          '()
@@ -299,7 +311,7 @@
 (defnp run-transaction [steps mps ctr]
   (if (empty? steps)
     [true mps  ctr]
-    (let [;_ (println "working on " steps)
+    (let [_ (println "working on " steps)
            [n & aparams] (first steps)
            ;_ (if (< (inc ctr) (count mps))
            ;    (println "Redoing: " n "with aparams " aparams  )
@@ -554,14 +566,15 @@
   [id rest]
    (let [check-syntax (partial check-syntax-generic
                                (str "NODE   :- ( node <HANDLE> <PROP> ) \n"
-                                    "PROP   :-  <LABEL> <ASSERT> <OID> <MERGE>  \n"
+                                    "PROP   :-  <LABEL> <ASSERT> <OID> <OPT> \n"
                                     "LABEL  :- :label *string* \n"
                                     "ASSERT :- :asserts {KEYVAL*} \n"
                                     "OID    :- :oid *number*"
                                     "KEYVAL :- KEY *string* \n"
                                     "HANDLE :- *symbol* \n"
                                     "KEY    :- *keyword* \n"
-                                    "MERGE  :- :merge true | false"))]
+                                    "OPT    := :merge true | :opt true"
+                                    ))]
      (check-syntax (symbol? id) "HANDLE should be a symbol."))
    ['node (assoc rest :id id)])
 
@@ -581,7 +594,7 @@
   [id rest]
   (let [check-syntax (partial check-syntax-generic
                               (str "(Problem with edg-id " id ") \n"
-                                   "EDGE     :- ( edge <HANDLE> <LABEL> LOCATION <ASSERTS>) \n"
+                                   "EDGE     :- ( edge <HANDLE> <LABEL> LOCATION <ASSERTS> <:opt true>) \n"
                                    "LOCATION :-  :src ID :tar ID  \n"
                                    "LABEL    :- :label L \n"
                                    "ASSERT   :- :asserts {KEYVAL*} \n"
@@ -768,16 +781,12 @@
 
 (def diagram show)
 
-(rule 'any-connected?
-  :read (pattern :homo
-                 (node 'n)
-                 (node 'm)
-                 (edge :src 'n :tar 'm)
-                 ))
-
 (rule 'any?
   :read (pattern
-                 (node 'n)))
+                 (node 'n)
+                 (node 'm)
+                 (edge :src 'n :tar 'm :opt true)
+                 ))
 
   (rule 'any-edge ['l]
     :read
