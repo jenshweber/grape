@@ -6,6 +6,8 @@ Persistent Graph Rewriting for Clojure.
 
 # News
 
+* Release 0.2.5 - Implemented optional nodes/edges
+
 * Release 0.2.4 - Edge attributes are now supported; homomorphic pattern matching is now default
 
 * Release 0.2.3 - Path expressions added
@@ -56,6 +58,12 @@ You may also want to allocate some additional resources:
 
 * **Clojure** (including Leiningen, requires JDK). Eric Normand has written very nice instructions [here](https://purelyfunctional.tv/guide/how-to-install-clojure/)
 * **Neo4J** Grape requires the graph database Neo4j. (Important: Grape has not been migrated to Neo4J v. 4 yet. Please use the latest v. 3 release.) The community edition (free) can be downloaded here: https://neo4j.com/download/
+
+* add the following line to your neo4j.conf:
+```
+cypher.lenient_create_relationship=true
+```
+
 * **Graphviz** Grape uses Graphviz for visualization. [installation](https://graphviz.gitlab.io/download/)
 
 ### Create a Grape project
