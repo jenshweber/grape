@@ -6,7 +6,7 @@ Persistent Graph Rewriting for Clojure.
 
 # News
 
-* Release 0.2.5 - Implemented optional nodes/edges
+* Release 0.2.6 - Implemented optional nodes/edges
 
 * Release 0.2.4 - Edge attributes are now supported; homomorphic pattern matching is now default
 
