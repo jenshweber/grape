@@ -38,10 +38,10 @@
 (defn node->cypher [s m n]
   (let [c (second n)
         k (if (= m :match) (if (:opt c) (if (first-optional?)
-                                          " OPTIONAL MATCH"
+                                          " WITH * OPTIONAL MATCH"
                                           " , "
                                           )
-                                        " MATCH")
+                                        " WITH * MATCH")
                            (if (:merge c) " MERGE"
                                           " CREATE"))
         nid (:id c)]
@@ -63,10 +63,10 @@
 (defn edge->cypher [s m e]
   (let [c (second e)
         k (if (= m :match) (if (:opt c) (if (first-optional?)
-                                          " OPTIONAL MATCH"
+                                          " WITH * OPTIONAL MATCH"
                                           " , "
                                           )
-                                        " MATCH")
+                                        " WITH * MATCH")
                            " MERGE")]
     (str
 ;      (if (= m :match)
@@ -231,13 +231,13 @@
     (str
      (reduce str (map (fn [[n i]]
                         (if (number? i)
-                          (str "  MATCH (" n ") WHERE id(" n ")=" i " ")
-                          (str "  OPTIONAL MATCH (" n ") WHERE id(" n ")= -1 ")
+                          (str "  WITH * MATCH (" n ") WHERE id(" n ")=" i " ")
+                          (str "  WITH * OPTIONAL MATCH (" n ") WHERE id(" n ")= -1 ")
                           )) nodes))
      (reduce str (map (fn [[e i]]
                         (if (number? i)
-                          (str "  MATCH ()-[" e "]->() WHERE id(" e ")=" i " ")
-                          (str "  OPTIONAL MATCH ()-[" e "]->() WHERE id(" e ")= -1 ")
+                          (str "  WITH * MATCH ()-[" e "]->() WHERE id(" e ")=" i " ")
+                          (str "  WITH * OPTIONAL MATCH ()-[" e "]->() WHERE id(" e ")= -1 ")
                           )) edges))
              )))
 
