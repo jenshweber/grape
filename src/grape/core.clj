@@ -311,7 +311,9 @@
 (defnp run-transaction [steps mps ctr]
   (if (empty? steps)
     [true mps  ctr]
-    (let [_ (println "working on " steps)
+    (let [
+
+          ;_ (println "working on " steps)
            [n & aparams] (first steps)
            ;_ (if (< (inc ctr) (count mps))
            ;    (println "Redoing: " n "with aparams " aparams  )
