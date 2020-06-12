@@ -100,8 +100,8 @@ cypher.lenient_create_relationship=true
 
 ```clojure
 (rule 'hello!
-  {:create (pattern
-             (node 'n1 {:label "Hello"}))})
+  :create (pattern
+             (node 'n1 :label "Hello")))
 ```
 
 * Execute the rule by calling it: `(hello!)`
@@ -112,15 +112,14 @@ cypher.lenient_create_relationship=true
 
 ```clojure
 (rule 'hello-grape!
-  {
    :read (pattern
-           (node 'n1 {:label "Hello"}))
+           (node 'n1 :label "Hello"))
    :create (pattern
-             (node 'n2 {:label "Grape"})
-             (edge 'e {:label "to" :src 'n1 :tar 'n2}))})
+             (node 'n2 :label "Grape")
+             (edge :label "to" :src 'n1 :tar 'n2)))
 ```
 
-* Execute that rule `(hello-grape!)` and check with the Neo4J browser that the graph was indeed extended.
+* Execute that rule `(hello-grape!)` and check with ```(-> any? matches view)``` that the graph was indeed extended.
 
 # Tutorial
 
