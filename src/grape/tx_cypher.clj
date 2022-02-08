@@ -67,7 +67,7 @@
                                           " , "
                                           )
                                         " WITH * MATCH")
-                           " MERGE")]
+                           " CREATE")]
     (str
 ;      (if (= m :match)
 ;        (str " WITH " (:src c) "," (:tar c))
@@ -85,16 +85,20 @@
 
 (defn path->cypher [e]
   (let [c (second e)
-        k  " MATCH"]
+        k  (if (:opt c) (if (first-optional?)
+                          " WITH * OPTIONAL MATCH"
+                          " , "
+                          )
+                        " WITH * MATCH") ]
     (str k " (" (:src c) ")"
          (str/join "()" (map (fn [s]
-                          (let [dir (subs s 0 0)
+                          (let [dir (subs s 0 1)
                                 seg (subs s 1 (count s))]
                             (cond (= dir ">") (str "-[" seg "]->")
                                   (= dir "<") (str "<-[" seg "]-")
                                   :else (str "-[" seg "]-"))))
                           (str/split (:exp c) #" ")))
-         "(" (:tar c) ") where 1=1 ")))
+         "(" (:tar c) ") ")))
 
 (defn graphelem->cypher [s m e]
   "Translate a graph element to cipher - either node or edge"

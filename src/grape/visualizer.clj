@@ -101,24 +101,24 @@
 (defn NAC->dot
   "translate a NAC to dot"
   [nac]
-  (let [nacid (second nac)
-        c (nth '("blue" "darkviolet" "brown" "dimgrey") nacid)
+  (let [
+        c "darkviolet"
         p (nth nac 2)]
-    (pattern->dot p [] c c " style=filled arrowhead=normalicurvecurve ")))
+    (pattern->dot p [] c c " style=filled arrowhead=normalicurvecurve fillcolor=violet")))
 
 (defn cond->dot
   "translate a condition to dot"
   [c]
   (str " "
        ;(get-ctr!)
-       " cond [color=lightgrey style=filled shape=house label=\"" (second c) "\"]"))
+       " cond [color=lightgrey style=filled shape=none label=\"Condition: " (second c) "\"]"))
 
 (defn assign->dot
   "translate an assignment to dot"
   [c]
   (str " "
        (get-ctr!)
-       " [color=seagreen1 style=filled shape=invhouse label=\"" (second c) "\"]"))
+       " [color=seagreen1 style=filled shape=none label=\"Assign: " (second c) "\"]"))
 
 
 (defn graphelem->dot [d c1 c2 o e]

@@ -737,12 +737,12 @@
 
 (defn qnode->dot [n]
   (str " n" (-> n :metadata :id)
-       " [label=\"" (-> n :metadata :id) ":" (-> n :metadata :label)
+       " [label=\"{" (-> n :metadata :id) ":" (-> n :metadata :label)
        (if (empty? (:data n))
          " "
          " | ")
-       (str/join "; " (map qdata->dot (:data n)))
-       "\"] "
+       (str/join "; " (mapv qdata->dot (:data n)))
+       "}\"] "
   ))
 
 (defn qedge->dot [e]
@@ -751,7 +751,7 @@
        " n" (-> e :end)
        " [label=\"" (-> e :metadata :label)
        " "
-       (str/join "; " (map qdata->dot (:data e)))
+       (str/join "; " (mapv qdata->dot (:data e)))
        "\"] "
        ))
 
@@ -760,11 +760,11 @@
     "digraph L {} "
    (let [r (if (map? g)
             g
-            (reduce (fn [m n] (merge-with concat m n))  g)
+            (reduce (fn [m n] (merge-with into m n))  g)
             )]
-      (str "digraph L {   rankdir=LR; node [shape=Mrecord]; "
-       (str/join (map qnode->dot (:nodes r)))
-       (str/join (map qedge->dot (:edges r)))
+      (str "digraph L {   node [shape=Mrecord]; "
+       (str/join (mapv qnode->dot (:nodes r)))
+       (str/join (mapv qedge->dot (:edges r)))
        "}"))))
 
 (defn oid [handle]
@@ -849,3 +849,6 @@
     (declare-violation
       (str "Source node of " e " edges should be unique")
       (test 'from-many e)))
+
+(defn browse []
+  (-> any? matches view))
