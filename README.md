@@ -105,7 +105,7 @@ http://viewer.gorilla-repl.org/view.html?source=github&user=jenshweber&repo=grap
 
 
 
-Copyright © 2016-20 Jens Weber
+Copyright © 2016-22 Jens Weber
 
 Distributed under the Eclipse Public License either version 1.0 or (at
 your option) any later version.
