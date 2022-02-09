@@ -20,37 +20,15 @@ Persistent Graph Rewriting for Clojure.
 
 Below is a description of two alternative ways to install Grape. The "Quickstart" way uses a prepared VM (with much of the installation work already done for you), while the "Slowstart" way describes a local installation.
 
-## Quickstart - using a Vagrant VM image
+## Quickstart - using Docker
 
-Grape can be installed using a prepared Vagrant VM. This assumes that you have [Vagrant installed](https://www.vagrantup.com/docs/installation).
+Assuming you have Docker installed, create a new notebook with name my-notebook:
 
-* Download and initialize the VM with `vagrant init jenshweber/grape`
-* Edit the `Vagrantfile` that was created by adding these port forwards: (feel free to forward to a different port if these ports collide with existing ones)
+``docker run --name my-notebook -p 8999:8999 -p 7474:7474 -p 7687:7687  jenshweber/grape``
 
-```
-  config.vm.network "forwarded_port", guest: 7687, host: 7687
-  config.vm.network "forwarded_port", guest: 7474, host: 7474
-  config.vm.network "forwarded_port", guest: 8080, host: 8080
-```
+Then navigate to http://127.0.0.1:8999/worksheet.html?filename=welcome.clj
 
-You may also want to allocate some additional resources:
-
-```
-  config.vm.provider "virtualbox" do |vb|
-    vb.memory = "4096"
-    vb.cpus = "3"
-  end
-```
-
-* Download and start the VM: `vagrant up`. (This will take some time to download the VM on the first call.)
-
-* Open a shell at the VM `vagrant ssh` 
-
-* Then `cd grapetest` and start a Grape REPL with `lein gorilla :ip 0.0.0.0 :port 8080`
-
-* Now just navigate to http://0.0.0.0:8080/worksheet.html?filename=welcome.clj
-
-* You can get the Neo4J browser at http://localhost:7474 (username neo4j, password grape)
+Creating further notebooks works the same. If you run notebooks concurrently, you need to update the port mappings. 
 
 ## Slowstart - using a local installation
 
