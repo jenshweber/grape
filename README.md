@@ -21,7 +21,7 @@ Below is a description of two alternative ways to install Grape. The "Quickstart
 
 Assuming you have Docker installed, create a new notebook with name my-notebook:
 
-``docker run --name my-notebook -p 8999:8999 -p 7474:7474 -p 7687:7687  jenshweber/grape-latest``
+``docker run --name grapepress -p 8999:8999 -p 7474:7474 -p 7687:7687  jenshweber/grape-latest``
 
 Then navigate to http://127.0.0.1:8999/worksheet.html?filename=welcome.clj
 
