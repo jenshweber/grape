@@ -1,56 +1,20 @@
 [![Clojars Project](https://img.shields.io/clojars/v/leadlab/grape.svg)](https://clojars.org/leadlab/grape)
+![logo](https://raw.githubusercontent.com/jenshweber/grape/master/resources/logo.jpg)
+# Grape and GrapePress
 
-# Grape - Graph Rewriting and Persistence Engine 
-
-Persistent Graph Rewriting for Clojure.
-
-# News
-
-* Release 0.2.6 - Implemented optional nodes/edges
-
-* Release 0.2.4 - Edge attributes are now supported; homomorphic pattern matching is now default
-
-* Release 0.2.3 - Path expressions added
-
-* Release 0.2 - Syntax simplification. Removed the need for a lot of curly braces in Grape rules. Also, node and edge handles are optional now. Makes rules simpler.
-
-* Release 0.1.1 - added mechanism to "pass on" nodes from one rule to another
+**_Grape_** is a **G**raph **R**ewriting and **P**ersistence **E**ngine for Clojure.  _**GrapePress**_ is a computational notebook that utilizes _Grape_.
 
 # Installation
 
-Below is a description of two alternative ways to install Grape. The "Quickstart" way uses a prepared VM (with much of the installation work already done for you), while the "Slowstart" way describes a local installation.
+## Quickstart - using Docker
 
-## Quickstart - using a Vagrant VM image
+Assuming you have Docker installed:
 
-Grape can be installed using a prepared Vagrant VM. This assumes that you have [Vagrant installed](https://www.vagrantup.com/docs/installation).
+``docker run --name grapepress -p 8999:8999 -p 7474:7474 -p 7687:7687  jenshweber/grape-latest``
 
-* Download and initialize the VM with `vagrant init jenshweber/grape`
-* Edit the `Vagrantfile` that was created by adding these port forwards: (feel free to forward to a different port if these ports collide with existing ones)
+Then navigate to http://127.0.0.1:8999/worksheet.html?filename=welcome.clj
 
-```
-  config.vm.network "forwarded_port", guest: 7687, host: 7687
-  config.vm.network "forwarded_port", guest: 7474, host: 7474
-  config.vm.network "forwarded_port", guest: 8080, host: 8080
-```
-
-You may also want to allocate some additional resources:
-
-```
-  config.vm.provider "virtualbox" do |vb|
-    vb.memory = "4096"
-    vb.cpus = "3"
-  end
-```
-
-* Download and start the VM: `vagrant up`. (This will take some time to download the VM on the first call.)
-
-* Open a shell at the VM `vagrant ssh` 
-
-* Then `cd grapetest` and start a Grape REPL with `lein gorilla :ip 0.0.0.0 :port 8080`
-
-* Now just navigate to http://0.0.0.0:8080/worksheet.html?filename=welcome.clj
-
-* You can get the Neo4J browser at http://localhost:7474 (username neo4j, password grape)
+Creating further notebooks works the same. If you run notebooks concurrently, you need to update the port mappings. 
 
 ## Slowstart - using a local installation
 
@@ -130,7 +94,7 @@ http://viewer.gorilla-repl.org/view.html?source=github&user=jenshweber&repo=grap
 
 
 
-Copyright © 2016-20 Jens Weber
+Copyright © 2016-22 Jens Weber
 
 Distributed under the Eclipse Public License either version 1.0 or (at
 your option) any later version.
