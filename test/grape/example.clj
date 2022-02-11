@@ -7,8 +7,8 @@
 (hello!)
 
 (rule 'lookup ['o]
-  {:read (pattern
-          (node 'n {:oid "&o"}))}
+  :read (pattern
+          (node 'n {:oid "&o"}))
   )
 
 (rule 'hello-grape!
@@ -21,8 +21,8 @@
 (hello-grape!)
 
 (rule 'hello?
-  {:read  (pattern
-           (node 'n1 {:label "Hello"}))})
+  :read  (pattern
+           (node 'n1 {:label "Hello"})))
 
 (hello?)
 

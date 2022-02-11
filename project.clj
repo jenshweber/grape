@@ -1,4 +1,4 @@
-(defproject leadlab/grape "0.2.8-SNAPSHOT"
+(defproject leadlab/grape "0.3.0-SNAPSHOT"
   :description "Graph Rewriting And Persistence Engine"
   :url "http://jenshweber.github.io/grape/"
   :license {:name "Eclipse Public License"

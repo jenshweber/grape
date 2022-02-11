@@ -716,6 +716,9 @@
 
 
 (defn document-rule [r]
+  (let [dir (java.io.File. "doc/images")]
+    (when (not (.exists dir))
+      (.mkdirs dir)))
   (dorothy/save! (rule->dot r (r (rules))) (str "doc/images/" (name r) ".png") {:format :png}))
 
 (defn document-rules []

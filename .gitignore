@@ -622,3 +622,4 @@ profiles.clj
 .clj-kondo/.cache/v1/cljs/taoensso.truss.impl.transit.json
 .clj-kondo/.cache/v1/cljs/taoensso.truss.transit.json
 .lsp/.cache/db.transit.json
+.calva/output-window/output.calva-repl
