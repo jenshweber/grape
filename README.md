@@ -1,25 +1,14 @@
 [![Clojars Project](https://img.shields.io/clojars/v/leadlab/grape.svg)](https://clojars.org/leadlab/grape)
+![logo](https://raw.githubusercontent.com/jenshweber/grape/master/resources/logo.jpg)
+# Grape and GrapePress
 
-# Grape - Graph Rewriting and Persistence Engine 
-
-Persistent Graph Rewriting for Clojure.
-
-# News
-
-* Released docker deployment
-* Release 0.2.6 - Implemented optional nodes/edges
-* Release 0.2.4 - Edge attributes are now supported; homomorphic pattern matching is now default
-* Release 0.2.3 - Path expressions added
-* Release 0.2 - Syntax simplification. Removed the need for a lot of curly braces in Grape rules. Also, node and edge handles are optional now. Makes rules simpler.
-* Release 0.1.1 - added mechanism to "pass on" nodes from one rule to another
+**_Grape_** is a **G**raph **R**ewriting and **P**ersistence **E**ngine for Clojure.  _**GrapePress**_ is a computational notebook that utilizes _Grape_.
 
 # Installation
 
-Below is a description of two alternative ways to install Grape. The "Quickstart" way uses a prepared VM (with much of the installation work already done for you), while the "Slowstart" way describes a local installation.
-
 ## Quickstart - using Docker
 
-Assuming you have Docker installed, create a new notebook with name my-notebook:
+Assuming you have Docker installed:
 
 ``docker run --name grapepress -p 8999:8999 -p 7474:7474 -p 7687:7687  jenshweber/grape-latest``
 
