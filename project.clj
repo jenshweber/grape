@@ -18,6 +18,7 @@
   :plugins [[lein-environ "1.1.0"]
             [org.clojars.benfb/lein-gorilla "0.6.0"]]
   :profiles {:dev {}}
+  :test-path "test/"
   :jvm-opts ["-Xmx1g" "-server"]
   :deploy-repositories [["clojars" {
                                     :url "https://clojars.org/repo"
