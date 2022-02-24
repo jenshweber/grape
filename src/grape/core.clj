@@ -83,10 +83,6 @@
 (def conn (nr/connect dburi dbusr dbpw))
 
 
-(defn drop-constraints! []
-  (swap! constraints-atom  (fn [old] '()))
-  (cy/query conn "CALL apoc.schema.assert({}, {})"))
-
 (defn begintx []
   (set-tx (nt/begin-tx conn)))
 
@@ -118,6 +114,13 @@
     r))
 
 
+(defn dbquery [q]
+  (debug println "DBQuery: " q)
+   (cy/query conn q))
+
+(defn dbtquery [q]
+  (debug println "DBQuery: " q)
+  (cy/tquery conn q))
 
 ; ---------------------------------------------------
 ; DSL
@@ -181,10 +184,9 @@
                   edgesToCreateStr
                   " WITH * "
                   itemsDeleteStr
-                  " RETURN _gn")
-        _ (println qstr)]
+                  " RETURN _gn")]
     (->
-     (cy/query conn qstr)
+     (dbquery qstr)
      first second first first :data :uid))) 
 
 
@@ -192,7 +194,7 @@
 (defn start []
   "DSL form to create a new graph"
   (->
-   (cy/query conn (str "create (g:`__Graph` {uid: apoc.create.uuid()}) return g"))
+   (dbquery (str "create (g:`__Graph` {uid: apoc.create.uuid()}) return g"))
    first second first first :data :uid))
 
 
@@ -366,10 +368,9 @@
 
 (defn occnodes [g kind]
   "return the occurance of kind nodes for graph g"
-  (let [qstr (str "match(g:`__Graph` {uid:'" g "'}) -[:" kind "]->(n:`__Node`) RETURN n  ")
-        _ (println qstr)]
+  (let [qstr (str "match(g:`__Graph` {uid:'" g "'}) -[:" kind "]->(n:`__Node`) RETURN n  ")]
     (->>
-     (cy/tquery conn qstr)
+     (dbtquery qstr)
      (map #(-> % (get-in ["n"]) (select-keys [:metadata :data]))))))
 
 (defn occdelnodes [g]
@@ -387,7 +388,7 @@
 (defn occedges [g kind]
   "return the occurance of kind nodes for graph g"
   (->>
-   (cy/tquery conn (str "match(g:`__Graph` {uid:'" g "'}) -[:" kind "]->(e:`__Edge`) 
+   (dbtquery (str "match(g:`__Graph` {uid:'" g "'}) -[:" kind "]->(e:`__Edge`) 
                       WITH * match (e)-[:src]->(s)
                       WITH * match (e)-[:tar]->(t)
                       RETURN e,s,t  "))
@@ -413,7 +414,7 @@
 (defn occgraphs [g]
   "search for g and its provenance"
   (let [res (->
-             (cy/tquery conn (str "match(g:`__Graph` {uid:'" g "'}) "
+             (dbtquery  (str "match(g:`__Graph` {uid:'" g "'}) "
              " OPTIONAL MATCH(g)-[e:prov]->(p) return g,e,p"))
              first)]
     {:g (get-in res ["g" :data :uid] )
@@ -490,32 +491,68 @@
           (apply str (map ed->dot (:deledges o))) "\n"
           (apply str (map ea->dot (:addedges o))) "\n"
           " } }")
-     println
-     ;show
+     show
      )))
 
+(defn step->dot [r]
+  (let [uid1 (get-in r ["g1" :data :uid])
+        id1  (get-in r ["g1" :metadata :id])]
+    (str id1 "[label=\"" (subs uid1 0 8) "\"]")))
 
 
+(defn prov->dot [r]
+  (let [rule (get-in r ["e" :data :rule])
+        src  (get-in r ["g2" :metadata :id])
+        tar  (get-in r ["g1" :metadata :id])]
+    (if (or (nil? src) (nil? tar))
+      " "
+      (str tar " -> " src "[label=\"" rule "\"]"))))
+
+(defn viewproc [g]
+  "view the graph process"
+  (let [p (dbtquery (str "match (g1:`__Graph`)-[:prov*0..]-(:`__Graph`{uid:\"" g "\"}) OPTIONAL match (g2)-[e:prov]->(g1:`__Graph`) return g1,e,g2"))
+        nodes (map step->dot p)
+        nodeStr (apply str (interpose " \n " nodes))
+        edges (map prov->dot p)
+        edgeStr (apply str (interpose " \n " edges))
+        complete   (str "digraph D { "
+                        nodeStr
+                        " "
+                        edgeStr
+                        "}")]
+    (show complete)))
+
+
+
+
+
+
+
+(comment
 
   (rule 'hello
         :create (pattern
                  (node :label "Hello")))
 
- (rule 'hello2
+
+  (rule 'hello2
         :read (pattern
-              (node 'n1 :label "Hello"))
-       :create (pattern
-                (node :label "World")))
+               (node 'n1 :label "Hello"))
+        :create (pattern
+                 (node :label "World")))
 
- (rule 'killHello
-       :read (pattern
-              (node 'n1 :label "Hello"))
-       :delete ['n1])
 
-(rule 'hello3
-      :read  (pattern
-              (node 'n1 :label "Hello")
-              (node 'n2 :label "World"))
-      :create (pattern
-               (edge 'e :label "to" :src 'n1 :tar 'n2)))
+  (rule 'killHello
+        :read (pattern
+               (node 'n1 :label "Hello"))
+        :delete ['n1])
+
+
+  (rule 'hello3
+        :read  (pattern
+                (node 'n1 :label "Hello")
+                (node 'n2 :label "World"))
+        :create (pattern
+                 (edge 'e :label "to" :src 'n1 :tar 'n2)))
+  )
   
