@@ -14,6 +14,7 @@
                  [environ "1.0.2"]
                  [nano-id "0.9.3"]
                  [proto-repl "0.3.1"]
+                 [gorilla-graph "0.1.0-SNAPSHOT"]
                  [org.clojars.benfb/gorilla-repl "0.6.0"]]
   :plugins [[lein-environ "1.1.0"]
             [org.clojars.benfb/lein-gorilla "0.6.0"]]

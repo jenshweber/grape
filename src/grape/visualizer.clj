@@ -1,13 +1,13 @@
 (ns grape.visualizer
   (:require
-    [clojure.data.json :as json]
-    [schema.core :as s]
-    [clojure.string :as str]
-    [clojure.set :refer :all]
-    [dorothy.core :as dorothy]
-    [clojure.data.codec.base64 :as b64]
-    [grape.util :refer :all]
-    [clojure.java.io :as io]))
+   [clojure.data.json :as json]
+   [schema.core :as s]
+   [clojure.string :as str]
+   [clojure.set :refer :all]
+   [dorothy.core :as dorothy]
+   [clojure.data.codec.base64 :as b64]
+   [grape.util :refer :all]
+   [clojure.java.io :as io]))
 
 (import javax.imageio.ImageIO)
 
@@ -30,12 +30,10 @@
 
 (defn show [g]
   (image-view
-    (ImageIO/read
-      (io/input-stream
+   (ImageIO/read
+    (io/input-stream
 ;  (dorothy/save! (dorothy/render  g {:format :png}) "out.png")
-        (dorothy/render  g {:format :png}))
-))
-)
+     (dorothy/render  g {:format :png})))))
 
 
 (defn asserts->dot [as]
@@ -44,9 +42,9 @@
     ""
     (str/join "; " (map (fn [[k v]]
                           (str (name k) "=" (if (str/starts-with? v "&")
-                                              (subs v 1 (count v) )
+                                              (subs v 1 (count v))
                                               v)))
-                               as))))
+                        as))))
 
 (defn node->dot [n c o]
   (let [p (second n)
@@ -56,10 +54,9 @@
         oid (:oid p)
         as (:asserts p)
         o (if (:opt p) " style=dashed "
-                       (if (:merge p)
-                         " style=diagonals "
-                         o))
-        ]
+              (if (:merge p)
+                " style=diagonals "
+                o))]
     (str " "
          handle " [color=" c " shape=record penwidth=bold  " o " "
          "label=\"{"
@@ -79,13 +76,12 @@
         as (:asserts p)
         o (if (:opt p) " style=dashed " o)]
     (str " " src " -> " tar
-          " [color=" c " penwidth=bold len=2  fontcolor=" c " " o
+         " [color=" c " penwidth=bold len=2  fontcolor=" c " " o
          " label=\"" l
          (if (empty? as)
            ""
            (str "\n{" (asserts->dot as) "}"))
-         "\" ]"
-         )))
+         "\" ]")))
 
 (defn path->dot [e c o]
   (let [p (second e)
@@ -93,16 +89,14 @@
         tar (name (:tar p))]
     (str " " src " -> " tar
          " [color=\"black:invis:black\" len=8 fontcolor=" c " " o
-         " label=\"" (:exp p) "\" ]"
-         )))
+         " label=\"" (:exp p) "\" ]")))
 
 (declare pattern->dot)
 
 (defn NAC->dot
   "translate a NAC to dot"
   [nac]
-  (let [
-        c "darkviolet"
+  (let [c "darkviolet"
         p (nth nac 2)]
     (pattern->dot p [] c c " style=filled arrowhead=normalicurvecurve fillcolor=violet")))
 
@@ -134,9 +128,8 @@
       (= 'cond t) (cond->dot e)
       (= 'assign t) (assign->dot e)
 
-     :else
-     (throw (Exception. "Invalid graph element"))
-     )))
+      :else
+      (throw (Exception. "Invalid graph element")))))
 
 
 (defn pattern->dot
@@ -165,6 +158,15 @@
          (pattern->dot c [] "green" "green" "")
          "}}")))
 
+(defn query->dot [rid query]
+  "translate a query to dot"
+  (let [n (name rid)
+        r (:read query)
+        p (:params query)]
+    (str "digraph g {  splines=true overlap=false subgraph cluster0 {"
+         "label=\"Query: " n (if (empty? p) "" (str p)) "\";"
+         (pattern->dot r [] "black" "black" "")
+         "}}")))
 
 
 
