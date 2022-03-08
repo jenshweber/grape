@@ -214,7 +214,10 @@
      (if (true? (:opt p))
        " optional match ("
        " match (") 
-     (:src p) ")<-["(:id p)"_s:src]-(" (:id p) ":`__Edge`" (if (empty? (:label p)) "" (str ":" (:label p))) ")-["(:id p)"_t:tar]->(" (:tar p) ")")))
+     (:src p) ")<-["(:id p)"_s:src]-(" (:id p) ":`__Edge`" 
+     (if (empty? (:label p)) "" (str ":" (:label p))) ")-["(:id p)"_t:tar]->(" (:tar p) ")"
+     " WHERE (" (:id p) ") <-[:create]-(:`__Graph`)<-[:prov*0..]-(_g)"
+     " AND NOT (" (:id p) ") <-[:delete]-(:`__Graph`)<-[:prov*0..]-(_g) ")))
 
 (defn createedge->cypher [e]
   (let [p (second e)]
@@ -227,21 +230,49 @@
   (str " create (" i ") <-[:delete]-(_gn) "))
 
 
-(defn exec [g n & par]
+(defn search [g n pars]
   (let [r ((rules) n)
-        itemsDeleteStr (apply str (interpose " WITH * " (map delitem->cypher (:delete r))))
         nodesToRead (filter-elem 'node (-> r :read second :els))
         nodesToReadStr (apply str (interpose " WITH * " (map readnode->cypher nodesToRead)))
-        nodesToReadStr2 (apply str (interpose " WITH * " (map readnode->cypher2 nodesToRead)))
+        nodesToReturnStr (apply str (interpose "," (map #(-> % second :id) nodesToRead)))
         edgesToRead (filter-elem 'edge (-> r :read second :els))
         edgesToReadStr (apply str (interpose " WITH * " (map readedge->cypher edgesToRead)))
+        edgesToReturnStr (apply str (interpose "," (map #(-> % second :id) edgesToRead)))
+        qstr (str "MATCH (_g:`__Graph` {uid:\"" g "\"}) "
+                  nodesToReadStr
+                  " WITH * " edgesToReadStr
+                  " RETURN _g "
+                  (if (not (empty? nodesToReturnStr)) (str "," nodesToReturnStr))
+                  (if (not (empty? edgesToReturnStr)) (str "," edgesToReturnStr)))]
+   (->> (dbtquery qstr)
+        (map (fn [row] (map (fn [col]
+                              (assoc (select-keys (second col) [:data :metadata])
+                                     :handle (first col)))
+                            row))))))
+
+
+
+(defn nodeRem->cypher [n]
+  (let [id   (-> n (:metadata) (:id))
+        handle (-> n (:handle))]
+    (str  " MATCH(" handle ") WHERE ID( " handle ")=" id)))
+
+(defn derive [g n pars redex]
+  (let [r ((rules) n)
+        nodesToRematch (filter (fn [x] (some #(= "__Node" %) (-> x :metadata :labels))) redex)
+        nodesToRematchStr (apply str (map nodeRem->cypher nodesToRematch))
+        edgesToRematch (filter (fn [x] (some #(= "__Edge" %) (-> x :metadata :labels))) redex)
+        edgesToRematchStr (apply str (map nodeRem->cypher edgesToRematch))
+        itemsDeleteStr (apply str (interpose " WITH * " (map delitem->cypher (:delete r))))
+        nodesToRead (filter-elem 'node (-> r :read second :els))
+        nodesToReadStr2 (apply str (interpose " WITH * " (map readnode->cypher2 nodesToRead)))
         nodesToCreate (filter-elem 'node (-> r :create second :els))
         nodesToCreateStr (apply str (interpose " WITH * " (map createnode->cypher nodesToCreate)))
         edgesToCreate (filter-elem 'edge (-> r :create second :els))
         edgesToCreateStr (apply str (interpose " WITH * " (map createedge->cypher edgesToCreate)))
         qstr (str "MATCH (_g:`__Graph` {uid:\"" g "\"}) "
-                  nodesToReadStr
-                  " WITH * " edgesToReadStr
+                  nodesToRematchStr
+                  " WITH * " edgesToRematchStr
                   " CREATE (_gn:`__Graph`{uid: apoc.create.uuid()})-[:prov{rule:\"" n "\"}]->(_g) "
                   nodesToCreateStr
                   " WITH * "
@@ -251,11 +282,23 @@
                   " WITH * "
                   itemsDeleteStr
                   " RETURN _gn")]
-   (let [g (->
-          (dbquery qstr)
-          first second first first :data :uid)]
-     (when (not (empty? g)) (set-graph! g))
-     g)))
+    (let [g (->
+             (dbquery qstr)
+             first second first first :data :uid)]
+      (when (not (empty? g)) (set-graph! g))
+      g)))
+
+
+(defn exec [g n par]
+  (let [redexes (search g n par)]
+    (if (empty? redexes)
+      nil
+      (derive g n par (first redexes)))))
+
+(defn exec* [g n par]
+  (let [redexes (search g n par)]
+    (map (partial derive g n par) redexes)))
+
 
 (defn exec-query [g n & par]
   (let [r ((queries) n)
@@ -449,14 +492,15 @@
 
     (let [r (assoc prop :params params)
           r2 (if (not (contains? prop :theory))
-              (assoc r :theory 'spo)
-              r)
+               (assoc r :theory 'spo)
+               r)
           s (if (not (contains? prop :delete))
-            (assoc r :delete [])
-            r2)]
+              (assoc r :delete [])
+              r2)]
        ;(validate-rule s)
       (add-rule! n s)
       (intern *ns* (symbol (str (name n))) (fn [g & par] (exec g n par)))
+      (intern *ns* (symbol (str (name n) "*")) (fn [g & par] (exec* g n par)))
       (intern *ns* (symbol (str (name n) "-dot")) (fn [] (rule->dot n s)))
       ((intern *ns* (symbol (str (name n) "-show")) (fn [] (show (rule->dot n s))))))))
 
@@ -747,7 +791,7 @@
 
 
 (query 'hallo []
-       (pattern (node 'n)))
+       (pattern (node 'n :label "kkk"))) 
 
 
 

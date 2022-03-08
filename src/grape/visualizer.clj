@@ -152,7 +152,7 @@
         d (:delete rule)
         c (:create rule)
         p (:params rule)]
-    (str "digraph g {  splines=true overlap=false subgraph cluster0 {"
+    (str "digraph g {  splines=true overlap=false rankdir=\"LR\" subgraph cluster0 {  "
          "label=\"Rule: " n (if (empty? p) "" (str p)) "\";"
          (pattern->dot r d "black" "red" "")
          (pattern->dot c [] "green" "green" "")
