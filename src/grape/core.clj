@@ -76,15 +76,19 @@
 
 (defn dbquery [q]
   (debug println "DBQuery: " q)
-  (try (cy/query conn q)
-       (catch Exception e (println (str "Caught exception: " (.toString e))))
-       (finally "UNSUCCESSFUL")))
+  (let [res (try (cy/query conn q)
+                 (catch Exception e (println (str "Caught exception: " (.toString e))))
+                 (finally "UNSUCCESSFUL"))]
+    (debug println "************* done \n")
+    res))
 
 (defn dbtquery [q]
   (debug println "DBQuery: " q)
-  (try (cy/tquery conn q)
-       (catch Exception e (println (str "Caught exception: " (.toString e))))
-       (finally "UNSUCCESSFUL")))
+  (let [res (try (cy/tquery conn q)
+                 (catch Exception e (println (str "Caught exception: " (.toString e))))
+                 (finally "UNSUCCESSFUL"))]
+    (debug println "************* done \n")
+    res))
 
 
 ; -------------------------------------------------------
@@ -180,21 +184,33 @@
 ; ---------------------------------------------------
 
 
+(defn resolve-value [scope s]
+  (let [[m par] (re-find #"(?:&)(\w+)" s)]
+    (if (nil? par)
+      s
+      (resolve-value scope (clojure.string/replace s m (str (scope (symbol par))))))))
+(defn asserts->cypher [s as]
+  "Translate a map of assertions to a Cypher code fragment"
+  (if (empty? as)
+    ""
+    (str " {" (reduce (partial str-sep ", ") (map (fn [[k v]] (str (name k) ":" (resolve-value s v))) as)) "}")))
 
 (defn readnode->cypher [n]
   (let [handle (-> n second :id)
         label (-> n second :label)
-        opt (-> n second :label)]
-    (str 
-     (if (true? opt) 
+        opt (-> n second :label)
+        ass (-> n second :asserts)]
+    (str
+     (if (true? opt)
        "optional match("
-       "match(") 
+       "match(")
      handle
-         (if (empty? label) ":__Node" (str ":__Node:" label))
-         ")"
-         "<-[:create]-(:`__Graph`)"
-         "<-[:prov*0..]-(_g)"
-         " where not (" handle ") <-[:delete]-(:`__Graph`)<-[:prov*0..]-(_g) ")))
+     (if (empty? label) ":__Node" (str ":__Node:" label))
+     (asserts->cypher [] ass)
+     ")"
+     "<-[:create]-(:`__Graph`)"
+     "<-[:prov*0..]-(_g)"
+     " where not (" handle ") <-[:delete]-(:`__Graph`)<-[:prov*0..]-(_g) ")))
 
 (defn readnode->cypher2 [n]
   (let [handle (-> n second :id)]
@@ -203,8 +219,11 @@
 
 (defn createnode->cypher [n]
   (let [handle (-> n second :id)
-        label (-> n second :label)]
-    (str " create(" handle ":" label ":__Node)"
+        label (-> n second :label)
+        ass (-> n second :asserts)]
+    (str " create(" handle ":" label ":__Node"
+         (asserts->cypher [] ass)
+         ")"
          "<-[:create]-(_gn) ")))
 
 
@@ -229,6 +248,20 @@
 (defn delitem->cypher [i]
   (str " create (" i ") <-[:delete]-(_gn) "))
 
+(defn all-ids [els]
+  (map (fn [el] (-> el second :id)) els))
+
+(defn gen-constraint-isomorphism
+  [nodes edges]
+  (if (and (<= (count nodes) 1) (<= (count edges) 1))
+    ""
+    (let [nc (combo/combinations (distinct (all-ids nodes)) 2)
+          ec (combo/combinations (distinct (all-ids edges)) 2)
+          ;_ (println "\n\n **** " nc " --- " ec " \n\n ")
+          f (fn [x] (str "ID(" (first x) ")<>ID(" (second x) ")"))
+          ni (map f nc)
+          ei (map f ec)]
+      (reduce (partial str-sep " AND ") (concat ni ei)))))
 
 (defn search [g n pars]
   (let [r ((rules) n)
@@ -241,6 +274,14 @@
         qstr (str "MATCH (_g:`__Graph` {uid:\"" g "\"}) "
                   nodesToReadStr
                   " WITH * " edgesToReadStr
+
+                  (if (= :iso (-> r :read second :sem))
+                    (let [st (gen-constraint-isomorphism nodesToRead edgesToRead)]
+                      (if (empty? st)
+                        ""
+                        (str " WITH * WHERE " st )))
+                    "")
+
                   " RETURN _g "
                   (if (not (empty? nodesToReturnStr)) (str "," nodesToReturnStr))
                   (if (not (empty? edgesToReturnStr)) (str "," edgesToReturnStr)))]
@@ -316,7 +357,13 @@
                   " WITH * "
                   nodesToReadStr
                   " WITH * " edgesToReadStr
-                  " RETURN _g," nodesToReturnStr "," 
+                  (if (= :iso (-> r :read second :sem))
+                    (let [st (gen-constraint-isomorphism nodesToRead edgesToRead)]
+                      (if (empty? st)
+                        ""
+                        (str " WITH * WHERE " st)))
+                    "")
+                  " RETURN _g," nodesToReturnStr ","
                   edgesToReturnStr1 "," edgesToReturnStr2 "," edgesToReturnStr3)]
     (->> (dbtquery qstr)
         (map (fn [row] (map (fn [col]
@@ -562,7 +609,6 @@
              (assoc :src (-> % (get-in ["s" :metadata :id])))
              (assoc :tar (-> % (get-in ["t" :metadata :id])))))))
 
-(def _g "64192761-908b-4f2f-9ed9-a4a268cc7370")
 
 (defn occdeledges [g]
   (occedges g "delete"))
@@ -687,14 +733,14 @@
         edges (filter (fn [x] (some #(= "__Edge" %) (-> x :metadata :labels))) res)
         edgeStr (apply str (map ek->dot edges))
         graphs (filter (fn [x] (some #(= "__Graph" %) (-> x :metadata :labels))) res)]
-    (str "digraph g { "
+    (str "digraph g { splines=true overlap=false subgraph cluster0 {"
          "label=\"GRAPH: " (or (-> graphs first :data :tag)
                                (-> graphs first :data :uid)
                                "empty") "\"; \n"
          nodeStr
          " \n "
          edgeStr
-         " } ")))
+         " }} ")))
 
 (defn n->view [n]
   (let [id   (-> n (:metadata) (:id))
@@ -759,39 +805,92 @@
 (defn browsegraph [g]
   (-> (any g) browsequery))
 
-
-; (-> (hallo "af905293-3006-448e-9d0e-bd171de2f9f2") result->dot)
-
 (comment
-
-  (rule 'hello
-        :create (pattern
-                 (node :label "Hello")))
-
-
-  (rule 'hello2
-        :read (pattern
-               (node 'n1 :label "Hello"))
-        :create (pattern
-                 (node :label "World")))
-
-
-  (rule 'killHello
-        :read (pattern
-               (node 'n1 :label "Hello"))
-        :delete ['n1])
+(rule 'setup-ferryman
+      :create
+      (pattern
+       (node 'tg :label "Thing" :asserts {:kind "'Goat'"})
+       (node 'tc :label "Thing" :asserts {:kind "'Grape'"})
+       (node 'tw :label "Thing" :asserts {:kind "'Wolf'"})
+       (node 's1 :label "Side" :asserts {:name "'This side'"})
+       (node 's2 :label "Side" :asserts {:name "'Other side'"})
+       (node 'f  :label "Ferry")
+       (edge :label "is_at" :src 'tg :tar 's1)
+       (edge :label "is_at" :src 'tc :tar 's1)
+       (edge :label "is_at" :src 'tw :tar 's1)
+       (edge :label "is_at" :src 'f :tar 's1)))
 
 
-  (rule 'hello3
-        :read  (pattern
-                (node 'n1 :label "Hello")
-                (node 'n2 :label "World"))
-        :create (pattern
-                 (edge 'e :label "to" :src 'n1 :tar 'n2))))
+(rule 'ferry_one_over
+      :read
+      (pattern :iso
+               (node 's1 :label "Side")
+               (node 's2 :label "Side")
+               (node 'f :label "Ferry")
+               (node 't :label "Thing")
+               (edge 'et :label "is_at" :src 't :tar 's1)
+               (edge 'e :label "is_at" :src 'f :tar 's1))
+      :delete ['e 'et]
+      :create
+      (pattern
+       (edge :label "is_at" :src 'f :tar 's2)
+       (edge :label "is_at" :src 't :tar 's2)))
+
+(rule 'cross_empty
+      :read
+      (pattern :iso
+               (node 's1 :label "Side")
+               (node 's2 :label "Side")
+               (node 'f :label "Ferry")
+               (edge 'e :label "is_at" :src 'f :tar 's1))
+      :delete ['e]
+      :create
+      (pattern
+       (edge :label "is_at" :src 'f :tar 's2)))
+
+(query 'wolf-can-eat-goat? []
+       (pattern :iso
+                (node 't1 :label "Thing" :asserts {:kind "'Wolf'"})
+                (node 't2 :label "Thing" :asserts {:kind "'Goat'"})
+                (node 's :label "Side")
+                (node 's2 :label "Side")
+                (edge :label "is_at" :src 't1 :tar 's)
+                (edge :label "is_at" :src 't2 :tar 's)
+                (node 'f :label "Ferry")
+                (edge :label "is_at" :src 'f :tar 's2)))
+
+(query 'goat-can-eat-grape? []
+       (pattern :iso
+                (node 't1 :label "Thing" :asserts {:kind "'Grape'"})
+                (node 't2 :label "Thing" :asserts {:kind "'Goat'"})
+                (node 's :label "Side")
+                (node 's2 :label "Side")
+                (edge :label "is_at" :src 't1 :tar 's)
+                (edge :label "is_at" :src 't2 :tar 's)
+                (node 'f :label "Ferry")
+                (edge :label "is_at" :src 'f :tar 's2)))
+
+(query 'all_on_the_other_side? []
+       (pattern
+        (node 'tg :label "Thing" :asserts {:kind "'Goat'"})
+        (node 'tc :label "Thing" :asserts {:kind "'Grape'"})
+        (node 'tw :label "Thing" :asserts {:kind "'Wolf'"})
+        (node 's2 :label "Side" :asserts {:name "'Other side'"})
+        (edge :label "is_at" :src 'tg :tar 's2)
+        (edge :label "is_at" :src 'tc :tar 's2)
+        (edge :label "is_at" :src 'tw :tar 's2)))
 
 
-(query 'hallo []
-       (pattern (node 'n :label "kkk"))) 
+(defn solveFMP []
+  (loop [gs (list (-> (newgraph) setup-ferryman))]
+    (let [solutions (filter #(not (empty? (all_on_the_other_side?  %))) gs)]
+      (if (empty? solutions)
+        (let [safeGs (filter #(and (empty? (wolf-can-eat-goat? %))
+                                   (empty? (goat-can-eat-grape? %))) gs)]
+          (recur (flatten
+                  (concat
+                   (map ferry_one_over* safeGs)
+                   (map cross_empty* safeGs)))))
+        (commit (first solutions) "solution")))))
 
-
-
+)
