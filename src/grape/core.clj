@@ -10,13 +10,6 @@
    [grape.analysis :refer :all]
    [grape.tx-cypher :refer :all]
    [environ.core :refer [env]]
-   [taoensso.timbre :as timbre
-    :refer (log trace info warn error fatal report
-                logf tracef debugf infof warnf errorf fatalf reportf
-                spy get-env log-env)]
-   [taoensso.timbre.profiling :as profiling
-    :refer (pspy pspy* profile defnp p p*)]
-   [dorothy.core :as dorothy]
    [neo4j-clj.core :as db]
    [gorilla-graph.core :as gorillagraph])
    (:import (java.net URI)))
@@ -270,7 +263,8 @@
 
 (defn getLabels [e]  (-> e second :labels))
 
-(defn getAttrs [e]  (-> e second (dissoc :labels :id :src :tar :handle)))
+(defn getAttrs [e]  (-> e second (dissoc :labels :id :src :tar :handle
+                                         :_fp :_fps :_fpt)))
 
 (defn nodeRem->cypher [n]
   (let [id   (getId n)
@@ -404,8 +398,10 @@
     (remove empty? res)))
 
 
-(defn choice [g & rs]
-  (flatten (map #(% g) rs)))
+(defn || [g & rs]
+  (let [res (flatten (map #(% g) rs))]
+   (set-graph! res)
+   res ))
 
 (defn rollback []
   (dbquery "MATCH (gt:`__Graph`)-[:prov*0..]->(gp:`__Graph`) 
@@ -880,17 +876,31 @@
 
 
 (defmacro ->* [start test & ops]
-  (list 'loop ['g start]
+  (list 'let ['res 
+                (list 'loop ['g start]
         (list 'if (list 'empty? 'g)
               'g
               (list 'let ['s (list test 'g)]
                     (list 'if (list 'empty? 's)
                           (list 'recur (concat (list '-> 'g) 
-                                               (interpose 'removeConfluent ops)
+                                               ops
                                                (list 'removeConfluent)))
+                          's))))]
+        (list 'set-graph! 'res)
+        'res))
+
+(defmacro ->*! [start test & ops]
+  (list 'loop ['g start]
+        (list 'if (list 'empty? 'g)
+              'g
+              (list 'let ['s (list test 'g)]
+                    (list 'if (list 'empty? 's)
+                          (list 'recur (concat (list '-> 'g)
+                                               ops
+                                               ))
                           's)))))
 
-;(comment
+(comment
 (rule 'setup-ferryman
       :create
       (pattern
@@ -966,25 +976,29 @@
         (edge :label "is_at" :src 'tg :tar 's2)
         (edge :label "is_at" :src 'tc :tar 's2)
         (edge :label "is_at" :src 'tw :tar 's2)))
+
+(debug! true)
+)
+
 (comment 
 
 
 
 
 
-(macroexpand '(<-> (-> (newgrape) setup-ferryman)
+(macroexpand '(->* (-> (newgrape) setup-ferryman)
                    all_on_the_other_side?
-                   (choice ferry_one_over*
+                   (|| ferry_one_over*
                            cross_empty*)
                    wolf-can-eat-goat?-
                    goat-can-eat-grape?-)))
 
 
-(debug! true)
+
 (comment
- (<-> (-> (newgrape) setup-ferryman)
+ (->* (-> (newgrape) setup-ferryman)
        all_on_the_other_side?
-       (choice ferry_one_over*
+       (|| ferry_one_over*
                cross_empty*)
        wolf-can-eat-goat?-
        goat-can-eat-grape?-)
@@ -1041,18 +1055,5 @@
 )
 
 
-(defn solve []
-  
-(loop* [g (-> (newgrape) setup-ferryman)] 
-       (if (empty? g) 
-         g 
-         (let [s (all_on_the_other_side? g)] 
-           (if (empty? s) 
-             (recur (-> g 
-                        (choice ferry_one_over* cross_empty*) 
-                        removeConfluent wolf-can-eat-goat?- 
-                        removeConfluent goat-can-eat-grape?- 
-                        removeConfluent)) s))))
-  )
 
               
