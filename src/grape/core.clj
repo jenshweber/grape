@@ -770,6 +770,7 @@
         edges (map prov->dot p)
         edgeStr (apply str (interpose " \n " edges))
         complete   (str "digraph D { "
+                        "size=\"10,20\" "
                         nodeStr
                         " "
                         edgeStr
