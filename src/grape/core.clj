@@ -1,25 +1,19 @@
 (ns grape.core
   (:require
-    [clojure.math.combinatorics :as combo]
-    [schema.core :as s]
-    [clojure.string :as str]
-    [clojure.set :refer [subset?]]
-    [grape.visualizer :refer :all]
-    [grape.tx-cypher :refer :all]
-    [grape.util :refer :all]
-    [grape.analysis :refer :all]
-    [clojurewerkz.neocons.rest.cypher :as cy]
-    [clojurewerkz.neocons.rest :as nr]
-    [clojurewerkz.neocons.rest.transaction :as nt]
-    [grape.tx-cypher :refer :all]
-    [environ.core :refer [env]]
-    [taoensso.timbre :as timbre
-     :refer (log trace info warn error fatal report
-                 logf tracef debugf infof warnf errorf fatalf reportf
-                 spy get-env log-env)]
-    [taoensso.timbre.profiling :as profiling
-     :refer (pspy pspy* profile defnp p p*)]
-    [dorothy.core :as dorothy]))
+   [clojure.math.combinatorics :as combo]
+   [schema.core :as s]
+   [clojure.string :as str]
+   [clojure.set :refer [subset?]]    
+   [grape.visualizer :refer :all]
+   [grape.tx-cypher :refer :all]
+   [grape.util :refer :all]
+   [grape.analysis :refer :all]
+   [grape.tx-cypher :refer :all]
+   [environ.core :refer [env]]
+   [neo4j-clj.core :as db]
+   [gorilla-graph.core :as gorillagraph]
+   [taoensso.tufte :as tufte :refer (defnp p profiled profile)])
+   (:import (java.net URI)))
 
 (use 'clojure.walk)
 
@@ -32,11 +26,8 @@
 (def dbpw (env :db-pw))
 
 (def rules-atom (atom {}))
-(def ret-atom (atom {}))
-(def bindings-atom (atom {}))
-(def last-match-atom (atom '()))
+(def queries-atom (atom {}))
 (def constraints-atom (atom '()))
-(def tx-atom (atom nil))
 
 (def debug-atom (atom false))
 
@@ -51,458 +42,89 @@
     (apply f s)))
 
 
-(defn tx [] (deref tx-atom))
-
-(defn set-tx [t] (swap! tx-atom (fn [old] t)))
-
-(defn add-violation! [msg f]
-  (swap! constraints-atom (fn [old] (conj old [msg f]))))
-
-
 (defn rules []
   (deref rules-atom))
 
-(defn ret []
-  (deref ret-atom))
 
-(defn reset-ret! []
-  (swap! ret-atom (fn [c] {})))
+(defn queries []
+  (deref queries-atom))
 
-(defn update-ret! [i]
-  (swap! ret-atom (fn [c] (merge c i))))
+(defn set-graph! [g] 
+  (intern 'grape.core '_ g))
 
-(defn bindings []
-  (deref bindings-atom))
-
-(defn add-binding! [k v]
-  (swap! bindings-atom (fn [c] (assoc c k v))))
+(set-graph! "nil")
 
 (defn add-rule! [n s]
   (swap! rules-atom (fn [c] (assoc c n s))))
 
-(def conn (nr/connect dburi dbusr dbpw))
+(defn add-query! [n s]
+  (swap! queries-atom (fn [c] (assoc c n s))))
+
+(def conn (try
+         (-> (db/connect (URI. "bolt://localhost:7687")
+                       "neo4j"
+                       "grape")
+             db/get-session)
+            (catch Exception e (println (str "Caught exception: " (.toString e))))
+            (finally "UNSUCCESSFUL")))
 
 
-(defn drop-constraints! []
-  (swap! constraints-atom  (fn [old] '()))
-  (cy/query conn "CALL apoc.schema.assert({}, {})"))
 
-(defn begintx []
-  (set-tx (nt/begin-tx conn)))
-
-(defn committx []
-  (nt/commit conn (tx))
-  (set-tx nil))
-
-(defn rollbacktx []
-  (nt/rollback conn (tx))
-  (set-tx nil))
-
-(declare run-transaction)
-
-(defn no-violations-iter [cs]
-  (if (empty? cs)
-    true
-    (let [n (-> cs first first)
-          f  (-> cs first second)]
-      (if (not (f))
-        (no-violations-iter (rest cs))
-        (do
-          (println "Grape schema constraint failed: " n)
-          false)))))
-
-(defn no-violations? []
-  (let [lrbuf (deref last-match-atom)
-        r  (no-violations-iter (deref constraints-atom))]
-        (swap! last-match-atom (fn [_] lrbuf))
-        r))
+(defn dbquery [q]
+  (debug println "DBQuery: " q)
+  (let [qf (db/create-query q)
+        res (try (qf conn)
+                 (catch Exception e (println (str "Caught exception: " (.toString e))))
+                 (finally "UNSUCCESSFUL"))]
+    (debug println "************* done \n")
+    res))
 
 
-(defn sort-graph-elms [x nids eids]
-  {:nodes (select-keys x nids)
-   :edges  (select-keys x eids)})
+; -------------------------------------------------------
+; Viewer
+; -------------------------------------------------------
 
-(defn tabelize [res]
-  (let [res2 (first (second res))
-        cols (:columns res2)
-        rows (map (fn [x] (:row x)) (:data res2))
-        tab (cy/tableize cols rows )]
-    tab))
-
-(defnp dbquery
-  ([q p]
-   (let [
-         _ (debug println "DBQuery: " q)
-         _ (when (nil? (tx)) (begintx))
-         res (nt/execute conn (tx) [(nt/statement q)])
-         els (:els (second p))
-         eids (map name (map get-id (filter-elem 'edge els)))
-         nids (map name (map get-id (filter-elem 'node els )))]
-     (set-tx (first res))
-     (let [tab (tabelize res)
-           ret (map (fn [x] (sort-graph-elms x nids eids)) tab)
-;           _ (println "Current bindings: " (eval '_ret))
-;           _ (println "new returns:" (first tab))
-
-           ]
-       (update-ret! (first tab))
-       ret)))
-  ([q]
-   (dbquery q '())))
+(defn node->view [c d n]
+  (let [p (second n
+                  )
+        handle (name (:id p))
+        dhandle (if (str/starts-with? handle "_") "_" handle)
+        l (:label p)
+        bgcolour (if c  "PaleGreen"
+                     (if (some #(= (symbol handle) %) d)
+                       "Salmon"
+                       "Gainsboro"))
+        bordercolour (if c  "#32CD32"
+                         (if (some #(= (symbol handle) %) d)
+                           "#FF2400"
+                           "black"))]
+    {:id handle 
+     :label (str dhandle (if (nil? l) "" (str ":" l)))
+     :shape "box"
+     :color {:background bgcolour
+             :border bordercolour
+             :highlight {:background bgcolour
+                         :border bordercolour}}
+     :shapeProperties (if (:opt p) {:borderDashes [5 5]} {})}))
 
 
-(defn query-match [i]
-  (let [
-;        _ (println i)
-        qn (str
-             (reduce-kv (fn [s k v]
-                          (if (number? v)
-                            (str s " MATCH (" k ")  where ID(" k ")=" v " ")
-                            s))
-                          "" (:nodes i))
-             " return *")
-        qe  (str
-             (reduce-kv (fn [s k v]
-                          (if (number? v)
-                            (str s " MATCH ()-[" k "]->()  where ID(" k ")=" v  " ")
-                            s)
-                            ) "" (:edges i))
-             " return *")
- ;       _ (println "QN: " qn)
- ;       _ (println "QE: " qe)
-        ]
-    {:nodes (if (= qn  " return *")
-              '()
-              (->> (keywordize-keys (cy/tquery conn qn))
-                 (map (fn [i] (reduce-kv (fn [s k v]
-                                          (conj s (assoc v :handle (name k))))
-                                          '()
-                                          i
-                                 )))
-                 (first)
-                 (map (fn [i] {:data (:data i)
-                               :metadata {:id (-> i :metadata :id)
-                                          :handle (-> i :handle)
-                                          :label (-> i :metadata :labels first)}
-                               }))))
-     :edges (if (= qe  " return *")
-              '()
-             (->> (keywordize-keys (cy/tquery conn qe))
-                 (map (fn [i] (reduce-kv (fn [s k v]
-                                           (conj s (assoc v :handle (name k))))
-                                         '()
-                                         i
-                                         )))
-                 (first)
-                 (map (fn [i] {:data (:data i)
-                               :metadata {:id (-> i :metadata :id)
-                                          :handle (-> i :handle)
-                                          :label (-> i :metadata :type)}
-                               :start (-> i :start (str/split #"/") last)
-                               :end (-> i :end (str/split #"/") last)}))))
-     }
 
-    )
-  )
-
-(keywordize-keys (cy/tquery conn "match (s) where ID(s)=168 match (t) where ID(t) = 245 return *"))
-
-(cy/tquery conn "match (s) where ID(s)=168 match (t) where ID(t) = 245 return *")
-
-
-(defn results []
-  (map query-match (deref last-match-atom)))
-
-(defn matches
-  ([r & params]
-   (if (empty? params)
-     (r)
-    (r params))
-   (results))
-  ([]
-   (results)))
-
-(defn return-id [l]
-  ((ret) (name l)))
-
-(defn return-node [l]
-  (return-id l))
-
-(defn return-edge [l]
-  (return-id l))
-
-(defn return-node-props [par]
-  (let [i (return-id par)
-        _ (begintx)
-        res (nt/execute conn (tx) [(nt/statement (str "MATCH (n) WHERE ID(n)=" i " RETURN *"))])
-        tab (tabelize res)]
-    (first (vals (first tab)))))
-
-(defn return-edge-props [par]
-  (let [i (return-id par)
-        _ (begintx)
-        res (nt/execute conn (tx) [(nt/statement (str "MATCH ()-[e]->() WHERE ID(e)=" i " RETURN *"))])
-        tab (tabelize res)]
-    (first (vals (first tab)))))
-
-
-(defnp match [s c m]
-  "match a pattern in the host graph. s is a parameterlist, c is an (optional) match context string and m is a pattern"
-  (if (nil? (:els (second m)))
-    '()
-    (let [q (str c " "(pattern->cypher s :match m))
-          ;          _ (print q)
-          m (if (str/blank? q)
-              true
-              (dbquery q m))
-              ;          _ (println "\nRESULT " m)
-          ]
-      (swap! last-match-atom (fn [_] m)) ; store last match in atom
-      m)))
-
-(defnp match-nacs [m s nacs]
-  (if (empty? nacs)
-    false
-    (let [nac (first nacs)
-          con (redex->cypher m)
-          [_ nacid p] nac
-          ext (pattern->cypher s :match p m)
-          ;_ (print ".       [Trying NAC " nacid "]: " con "  ||  " ext )
-          ]
-      (let [res (dbquery (str con " " ext))
-            ; _ (println " [" (not (empty? res)) "]")
-            ]
-        (if (empty? res)
-          (match-nacs m s (rest nacs))
-          true)))))
-
-
-(defnp check [ms s nacs]
-  "check nacs in context of prior matches"
-  (remove (fn [x] (nil? x))
-          (map (fn [m] (if (match-nacs m s nacs)
-                         nil
-                         m))
-               ms)))
-
-(defnp check-only [s nacs]
-  "check nacs in context of no readers"
-  (match-nacs '() s nacs))
-
-
-(defnp drop-n [coll n]
-  (if (zero? n)
-    coll
-    (drop-n (rest coll) (dec n))))
-
-(declare run-transaction)
-
-
-(defn swap [mps e]
-  (concat (take (dec (count mps)) mps) (list (assoc (last mps) :btp e))))
-
-
-(defn resolve-consults [params]
-  (map (fn [p] (if (and (vector? p) (= '__consult (first p)))
-                 ((bindings) (second p))
-                 p))
-       params))
-
-(defnp run-transaction [steps mps ctr]
-  (if (empty? steps)
-    [true mps  ctr]
-    (let [
-
-          ;_ (println "working on " steps)
-           [n & aparams] (first steps)
-           ;_ (if (< (inc ctr) (count mps))
-           ;    (println "Redoing: " n "with aparams " aparams  )
-           ;    (println "Current step: " n "with aparams " aparams  ))
-           ctr (inc ctr)
-           new (= (count mps) ctr)
-           mps (if new
-                 (concat mps (list {:name n :btp 0 :max 0}))
-                 mps)
-           btp (:btp (nth mps ctr))
-          ]
-
-
-      (cond (= '__until n)
-            ;;
-            ;; UNTIL
-            ;;
-            (do ;(println "UNTIL")
-              (cond (zero? btp) (let [;_ (print "      testing until condition: ")
-                                       [res m c] (run-transaction (list (first aparams)) '() -1)
-                                       ;_ (println (true? res))
-                                       ]
-                                  (if (true? res)
-                                    (run-transaction (rest steps) (swap mps 2) ctr) ;; until met
-                                    (let [r (run-transaction (concat (second aparams) steps) (swap mps 1) ctr)]
-                                      r)))
-                    ;; until not met
-                    (= btp 1) (run-transaction (concat (second aparams) steps) mps ctr) ;; not met
-                    (= btp 2) (run-transaction (rest steps) mps ctr))) ;; met
-            ;;
-            ;; CHOICE
-            ;;
-            (= '__choice n) (let [;_ (println "CHOICE")
-                                   aparams (first aparams)
-                                   mps (if new
-                                         (concat (take (dec (count mps)) mps) (list {:name '__choice :btp 0 :max (dec (count aparams))} ))
-                                         mps)]
-                              (run-transaction (concat (list (nth aparams btp)) (rest steps)) mps ctr))
-            ;;
-            ;; AVOID
-            ;;
-            (= '__avoid n) (let [;_ (println "AVOID")
-                                  res (if new
-                                        (reduce (fn [agg n]
-                                                  (let [[r m c] (run-transaction (list n) '() -1)
-                                                        ;_ (println "avoid cond check: " r)
-                                                        ]
-                                                    (or agg (true? r))))
-                                                false (first aparams))
-                                        false)]
-                             (if (true? res)
-                               [false mps ctr]
-                               (run-transaction (rest steps) mps ctr)))
-
-            ;;
-            ;; TRANSACT
-            ;;
-
-            (= '__transact n) (let [;_ (println "TRANSACT, now continuing with " (first aparams))
-                                     [res n-mps n-ctr] (run-transaction (first aparams) mps ctr )]
-                                (if (true? res)
-                                  (let [mps2 (if (> (count n-mps) (count mps)) n-mps mps)]
-                                    (run-transaction (rest steps) mps2 n-ctr))
-                                  [res n-mps n-ctr]))
-            ;;
-            ;; BIND
-            ;;
-            (= '__bind n) (let [k (first aparams)
-                                v (return-id (second aparams))]
-                           ; (println " binding node id " v)
-                            (add-binding! k v)
-
-                            (if new
-                              (run-transaction (rest steps) (concat mps (list {:name n :btp 0 :max 0})) ctr)
-                              (run-transaction (rest steps) mps ctr)))
-
-            :else
-
-            (let [;_ (println "RULE")
-                   r ((rules) n)
-                   fparams (:params r)
-                   aparams (resolve-consults aparams)]
-              (when (nil? r)
-                (throw (Exception. (str "rule '" n "' does not exist \n"))))
-              (when (not (= (count fparams) (count aparams)))
-                (throw (Exception. (str "Wrong number of arguments for rule '" n "' (" (count aparams)" instead of " (count fparams) ")" aparams " \n"))))
-
-              ; match
-
-
-              (let [reader (:read r)
-                    s (zipmap fparams aparams)
-                    matches (if (nil? reader)
-                              nil
-                              (let [;_ (print ".     [matching LHS] ")
-                                     cm (match s "" reader)
-                                     ;  _ (println ".       [matches found before NACs check: " (count cm) "]")
-                                     nacs (filter (fn [x] (= 'NAC (first x))) (:els (second reader)))
-
-                                     mc (if (true? cm) ; empty reader
-                                          (if (check-only s nacs)
-                                            '()
-                                            true)
-                                          (check cm s nacs))
-                                     ;  _ (println ".         [matches remaining after NACs check: " (count mc) "]" )
-                                     mt (if (true? mc)
-                                          true
-                                          (drop-n mc btp))
-                                     ;_ (println ".           [matches remaining after backtracking point (" btp "):" (count mt) "]")])
-                                     ]
-                                mt))]
-;                (println "MATCHES " (apply str matches))
-                (if (and (not (nil? matches)) (not (true? matches))(zero? (count matches)))
-                  (do
-                    ;(println ".        [Failure] " [false mps ctr])
-                    [false mps ctr])
-                  (let [redex (if (or (nil? matches) (true? matches))
-                                ""
-                                (redex->cypher (first matches)))
-                        s (str redex
-                               (if (contains? r :delete)
-                                 (str (if (= (:theory r) 'dpo)
-                                        " DELETE "
-                                        " DETACH DELETE ")
-                                      (reduce (partial str-sep ", ") (:delete r)))
-                                 "")
-                               (if (contains? r :create)
-                                 (pattern->cypher s :create (:create r) (:read r))
-                                 ""))
-                        ;_ (print ".     [attempting to rewrite graph:] ")
-                        ]
-
-                    (try
-                      (when (or (contains? r :create) (contains? r :delete))
-                        (do
-                          ;(println "MODIFY GRAPH: " s)
-                          (dbquery s)))
-                      ;(println s "\n.        [Success] mps:" mps " ctr:" ctr)
-                      (let [m (if (or (nil? matches) (true? matches)) 0 (count matches))
-                            mps (if new
-                                  (concat (take (dec (count mps)) mps) (list {:name n :btp 0 :max (dec m)}))
-                                  mps)]
-                        (run-transaction (rest steps) mps ctr))
-                      (catch Exception e
-                          [false mps ctr]
-                          ))))))))))
-
-(defnp track-back [mps ctr]
-  (let [n-ctr (dec ctr)]
-    (if (< n-ctr 0)
-      [mps n-ctr]
-      (let [step (nth mps n-ctr)]
-        (if (or (some #{(:name step)} ['__transact '__avoid '__until]) (= (:btp step) (:max step)))
-          (track-back mps n-ctr)
-          (let [n-mps (concat (take n-ctr mps) (list (assoc step :btp (inc (:btp step)))))]
-            [n-mps n-ctr]))))))
-
-(defnp transact-iter
-  [steps mps iter]
-  (begintx)
-  (reset-ret!)
-  (let [
-        ;_ (println "Transact-iteration: " iter)
-        ;_ (println "mps: " (map (fn [s] [(:name s) (:btp s) (:max s)]) mps))
-        ;_ (Thread/sleep 500)
-        [res r-mps ctr] (run-transaction steps mps -1)]
-    (if (and (true? res) (no-violations?))
-      (try
-        (committx)
-        true
-        (catch Exception e
-          (println (str ".      [Failed]: " (.getMessage e)))
-          false))
-      (do
-        (when (< iter 500)
-          (do
-            (try
-              (rollbacktx)
-              (catch Exception e)
-              )
-            (let [ [n-mps n-ctr] (track-back r-mps ctr)
-                   ;_ (println "transaction failed at ctr:" ctr "  !! " r-mps)
-                   ;_ (println " new ctr: " n-ctr "  || " n-mps)
-                   ]
-              (if (< n-ctr 0)
-                false
-                (transact-iter steps n-mps (inc iter))))))))))
-
-
+(defn edge->view [c d e]
+  (let [p (second e)
+        handle (name (:id p))
+        src (name (:src p))
+        tar (name (:tar p))
+        l (:label p)
+        colour (if c  "#32CD32"
+                   (if (some #(= (symbol handle) %) d)
+                     "#FF2400"
+                     "Black"))]
+    {:from src
+     :to tar
+     :color colour
+     :label l
+     :shapeProperties (if (:opt p) {:borderDashes [5 5]} {})
+     :arrows {:to {:enabled true}}}))
 
 
 
@@ -511,74 +133,340 @@
 ; ---------------------------------------------------
 
 
-(defn transact
-  [& steps]
-  ['__transact steps])
+(defn resolve-value [scope s]
+  (let [[m par] (re-find #"(?:&)(\w+)" s)]
+    (if (nil? par)
+      s
+      (resolve-value scope (clojure.string/replace s m (str (scope (symbol par))))))))
+(defn asserts->cypher [s as]
+  "Translate a map of assertions to a Cypher code fragment"
+  (if (empty? as)
+    ""
+    (str " {" (reduce (partial str-sep ", ") (map (fn [[k v]] (str (name k) ":" (resolve-value s v))) as)) "}")))
+
+(defn readnode->cypher [n]
+  (let [handle (-> n second :id)
+        label (-> n second :label)
+        opt (-> n second :opt)
+        ass (-> n second :asserts)]
+    (str
+     (if (true? opt)
+       "optional match("
+       "match(")
+     handle
+     (if (empty? label) ":__Node" (str ":__Node:" label))
+     (asserts->cypher [] ass)
+     ")"
+     "WHERE ID(" handle ") IN _active ")))
+
+(defn readnode->cypher2 [n]
+  (let [handle (-> n second :id)]
+    (str "create (" handle ")"
+         "<-[:read{handle:'" handle "'}]-(_gn)")))
+
+(defn createnode->cypher [n]
+  (let [handle (-> n second :id)
+        label (-> n second :label)
+        ass (-> n second :asserts)]
+    (str " create(" handle ":" label ":__Node"
+         (asserts->cypher [] ass)
+         ")"
+         "<-[:create{handle:'" handle "'}]-(_gn)  "
+         "set " handle "._fp=apoc.hashing.fingerprint("handle") ")))
 
 
-(defn attempt
-  [& steps]
-  (transact-iter steps '() 0))
+(defn readedge->cypher [e]
+  (let [p (second e)]
+    (str 
+     (if (true? (:opt p))
+       " optional match ("
+       " match (") 
+     (:src p) ")<-["(:id p)"_s:src]-(" (:id p) ":`__Edge`" 
+     (if (empty? (:label p)) "" (str ":" (:label p))) ")-["(:id p)"_t:tar]->(" (:tar p) ")"
+     " WHERE ID(" (:id p) ") IN _active ")))
 
-(defn until [test & steps]
-  ['__until [test] steps])
+(defn createedge->cypher [e]
+  (let [p (second e)
+        handle (:id p)
+        source (:src p)
+        target (:tar p)]
+    (str " CREATE ( " handle " :`__Edge`:" (:label p) ") <-[:create{handle:'" handle "'}]-(_gn)"
+         " WITH * CREATE ( " target " )<-[:tar]-(" handle ") -[:src]->(" source " )"
+         " SET " handle ".src=ID(" source "), "
+         handle ".tar=ID(" target "), "
+         handle "._fps=" source "._fp, "
+         handle "._fpt=" target "._fp "
+         "with * SET "
+         handle "._fp=apoc.hashing.fingerprint("  handle 
+                ", ['tar', 'src']) ")))
 
-(defn choice [ & steps]
-  ['__choice steps])
+(defn delitem->cypher [i]
+  (str " create (" i ") <-[:delete]-(_gn) "))
 
-(defn avoid [& steps]
-  ['__avoid steps])
+(defn all-ids [els]
+  (map (fn [el] (-> el second :id)) els))
 
-(defn apl [r & pars]
-  (vec (concat [r] pars)))
+(defn gen-constraint-isomorphism
+  [nodes edges]
+  (if (and (<= (count nodes) 1) (<= (count edges) 1))
+    ""
+    (let [nc (combo/combinations (distinct (all-ids nodes)) 2)
+          ec (combo/combinations (distinct (all-ids edges)) 2)
+          ;_ (println "\n\n **** " nc " --- " ec " \n\n ")
+          f (fn [x] (str "ID(" (first x) ")<>ID(" (second x) ")"))
+          ni (map f nc)
+          ei (map f ec)]
+      (reduce (partial str-sep " AND ") (concat ni ei)))))
 
-(defn unique [node attr]
-  "DSL form to create a uniqueness constraint"
-  (cy/query conn (str "CREATE CONSTRAINT ON (n:" node ") ASSERT n." attr " IS UNIQUE"))
-  nil)
-
-(defn index [node & attrs]
-  "DSL form to create an index"
-  (cy/query conn (str "CREATE INDEX ON :" node "(" (clojure.string/join "," attrs) ")"))
-  nil)
-
-(defn test [r & par]
-  (let [v (if (empty? par) [r] (concat [r] par))]
-    (fn [] (first (run-transaction (list v) '() -1)))))
-
-(defn declare-violation [msg f]
-    (if (not (f))
-      (do
-        (add-violation! msg f)
-        true)
-      false))
+(defn readnodeRet->cypher [n]
+  (let [id (-> n second :id)]
+    (str id "{.*, "
+         "id:ID(" id "), "
+         "labels:labels(" id ")} ")))
 
 
-(defn nsel [id nodes]
-;  (println (str "ID:" id "   NODES:" (apply str nodes)))
-  (if (= id (-> nodes first :metadata :handle))
-    (-> nodes first)
-    (if (empty? (rest nodes))
-      '()
-      (nsel id (rest nodes)))))
+(defn search [g n pars]
+  (let [r ((rules) n)
+        nodesToRead (filter-elem 'node (-> r :read second :els))
+        nodesToReadStr (apply str (interpose " WITH * " (map readnode->cypher nodesToRead)))
+        nodesToReturnStr (apply str (interpose "," (map readnodeRet->cypher nodesToRead)))
+        edgesToRead (filter-elem 'edge (-> r :read second :els))
+        edgesToReadStr (apply str (interpose " WITH * " (map readedge->cypher edgesToRead)))
+        edgesToReturnStr (apply str (interpose "," (map readnodeRet->cypher edgesToRead)))
+        qstr (str "MATCH (_g:`__Graph` {uid:\"" g "\"}) "
+                  " WITH * call { with _g optional match (_g)-[:prov*0..]->()-[:create]->(oc)"
+                  " with * optional match (_g)-[:prov*0..]->()-[:delete]->(od)"
+                  " return apoc.coll.subtract(collect(ID(oc)), collect(ID(od))) as _active } "
+                  " WITH * "
+                  nodesToReadStr
+                  " WITH * " edgesToReadStr
+
+                  (if (= :iso (-> r :read second :sem))
+                    (let [st (gen-constraint-isomorphism nodesToRead edgesToRead)]
+                      (if (empty? st)
+                        ""
+                        (str " WITH * WHERE " st)))
+                    "")
+
+                  " RETURN _g "
+                  (if (not (empty? nodesToReturnStr)) (str "," nodesToReturnStr))
+                  (if (not (empty? edgesToReturnStr)) (str "," edgesToReturnStr)))]
+   (p ::search (dbquery qstr))))
+
+
+(defn getHandle [e]  (-> e first name))
+
+(defn getId [e]  (-> e second :id))
+
+(defn getSrc [e]  (-> e second :src))
+(defn getTar [e]  (-> e second :tar))
+
+(defn getTag [e]  (-> e second :tag))
+
+(defn getLabels [e]  (-> e second :labels))
+
+(defn getAttrs [e]  (-> e second (dissoc :labels :id :src :tar :handle
+                                         :_fp :_fps :_fpt)))
+
+(defn nodeRem->cypher [n]
+  (let [id   (getId n)
+        handle (getHandle n)]
+    (str  " MATCH(" handle ") WHERE ID( " handle ")=" id)))
+
+(defn derive [g n pars redex]
+  (let [r ((rules) n)
+        nodesToRematch (filter (fn [x] (some #(= "__Node" %) (-> x second :labels))) redex)
+        nodesToRematchStr (apply str (map nodeRem->cypher nodesToRematch))
+        edgesToRematch (filter (fn [x] (some #(= "__Edge" %) (-> x second :labels))) redex)
+        edgesToRematchStr (apply str (map nodeRem->cypher edgesToRematch))
+        itemsDeleteStr (if (empty? (:delete r))
+                         " "
+                         (str " WITH * "(apply str (interpose " WITH * " (map delitem->cypher (:delete r))))))
+        nodesToRead (filter-elem 'node (-> r :read second :els))
+        nodesToReadStr2 (if (empty? nodesToRead)
+                          ""
+                          (str " WITH * "(apply str (interpose " WITH * " (map readnode->cypher2 nodesToRead)))))
+        nodesToCreate (filter-elem 'node (-> r :create second :els))
+        nodesToCreateStr (if (empty? nodesToCreate)
+                           ""
+                           (str " WITH * " (apply str (interpose " WITH * " (map createnode->cypher nodesToCreate))))) 
+        edgesToCreate (filter-elem 'edge (-> r :create second :els))
+        edgesToCreateStr (if (empty? edgesToCreate)
+                           ""
+                           (str " WITH * "(apply str (interpose " WITH * " (map createedge->cypher edgesToCreate)))))
+        qstr (str "MATCH (_g:`__Graph` {uid:\"" g "\"}) WITH * "
+                  nodesToRematchStr
+                  " WITH * " edgesToRematchStr
+                  " CREATE (_gn:`__Graph`{uid: apoc.create.uuid()})-[:prov{rule:\"" n "\"}]->(_g) "
+                  nodesToCreateStr
+                  nodesToReadStr2
+                  edgesToCreateStr
+                  itemsDeleteStr
+
+                  "with _gn optional match (_gn) -[:prov*0..]->()-[:create]->(_el) "
+                  " where not (_gn) -[:prov*0..]->()-[:delete]->(_el) "
+                  " with _gn, collect (distinct _el._fp) as _fps "
+                  " set _gn._fps = apoc.coll.sort(_fps)"
+                  " with _gn set _gn._fp=apoc.hashing.fingerprint (_gn, ['uid']) "
+                  "with _gn optional match (_gconf:`__Graph`{`_fp`:_gn.`_fp`}) " 
+                  " where ID(_gn) <> ID(_gconf) "
+                  " create (_gn)-[:conf]->(_gconf)"
+                 " RETURN _gn {.uid}")]
+    (->
+     (dbquery qstr)
+     first
+     :_gn :uid
+     list)))
+
+
+(defn- exec- [g n par]
+  (let [redexes (search g n par)]
+    (if (empty? redexes)
+      nil
+      (let [gn (derive g n par (first redexes))]
+        (set-graph! gn)
+        gn))))
+
+
+(defnp exec [gs n par]
+  (let [res (map #(exec- % n par) gs)
+        gn (reduce concat res)]
+    (if (not (empty? gn))
+            (set-graph! gn))
+    gn))
+
+(defn- exec*- [g n par]
+  (let [redexes (search g n par)]
+    (let [gns (map (partial derive g n par) redexes)
+          gn (reduce concat gns)]
+      gn)))
+
+
+(defnp exec* [gs n par]
+  (let [res (map #(exec*- % n par) gs)
+        gn (reduce concat res)]
+    (if (not (empty? gn))
+      (set-graph! gn))
+    gn))
+
+(defn- exec-query- [g n par]
+  (let [r ((queries) n)
+        nodesToRead (filter-elem 'node (-> r :read second :els))
+        nodesToReadStr (apply str (interpose " WITH * " (map readnode->cypher nodesToRead)))
+        edgesToRead (filter-elem 'edge (-> r :read second :els))
+        edgesToReadStr (apply str (interpose " WITH * " (map readedge->cypher edgesToRead)))
+        nodesToReturnStr (apply str (interpose "," (map readnodeRet->cypher nodesToRead)))
+        edgesToReturnStr (apply str (interpose "," (map readnodeRet->cypher edgesToRead)))
+
+
+        qstr (str "MATCH (_g:`__Graph` {uid:\"" g "\"}) "
+                  " WITH * call { with _g optional match (_g)-[:prov*0..]->()-[:create]->(oc)"
+                                 " with * optional match (_g)-[:prov*0..]->()-[:delete]->(od)"
+                                 " return apoc.coll.subtract(collect(ID(oc)), collect(ID(od))) as _active } "
+                  " WITH * "
+                  nodesToReadStr
+                  " WITH * " edgesToReadStr
+                  (if (= :iso (-> r :read second :sem))
+                    (let [st (gen-constraint-isomorphism nodesToRead edgesToRead)]
+                      (if (empty? st)
+                        ""
+                        (str " WITH * WHERE " st)))
+                    "")
+                  " RETURN _g{.*}," nodesToReturnStr 
+                  (if (empty? edgesToReturnStr)
+                    ""
+                    (str "," edgesToReturnStr)))]
+;    (apply concat (->> (dbquery qstr)
+;         (map #(into [] %))))))
+    (p ::query (dbquery qstr))))
+
+(defnp exec-query [gs n par]
+  (let [res (map #(exec-query- % n par) gs)]
+    (remove empty? res)))
+
+(defn- test-query- [g n par]
+  (if (empty? (exec-query- g n par))
+    nil
+    g))
+
+(defn- test-query-neg- [g n par]
+  (if (empty? (exec-query- g n par))
+    g
+    nil))
+
+(defn test-query [gs n par]
+  (let [res (map #(test-query- % n par) gs)]
+    (remove empty? res)))
+
+(defn test-query-neg [gs n par]
+  (let [res (map #(test-query-neg- % n par) gs)]
+    (remove empty? res)))
+
+
+(defn || [g & rs]
+  (let [res (flatten (map #(% g) rs))]
+   (set-graph! res)
+   res ))
+
+(defn rollback []
+  (dbquery "MATCH (gt:`__Graph`)-[:prov*0..]->(gp:`__Graph`) 
+   WHERE gt.tag IS NOT NULL  with collect(gp.uid) as transacted 
+   match (g:`__Graph`) where g.tag IS NULL and not g.uid in transacted 
+   with * OPTIONAL MATCH (g) -[:create]->(i) detach delete g,i")
+  true)
+
+(defn commit [gs t]
+    (let [res (dbquery (str "MATCH (g:`__Graph`{uid:\"" (first gs) 
+                            "\"}) set g.tag=\"" t "\" return g"))
+        id   (if (empty? res) 
+               nil
+               (-> res first :g :uid))]
+    id))
+
+(defn uncommit [t]
+  (let [res (dbquery (str "MATCH (g:`__Graph`{tag:\"" t
+                          "\"}) remove g.tag return g"))
+        id   (if (empty? res)
+               "NOT FOUND"
+               (-> res first :g :uid))]
+    id))
+
+
+(defn grape [t]
+  (let [res (dbquery (str "MATCH (g:`__Graph`{tag:\"" t "\"}) return g"))
+        id   (if (empty? res) 
+               "NOT FOUND"
+               (-> res first :g :uid))]
+    (when (not (= "NOT FOUND" id))
+      (set-graph! (list id)))
+    (list id)))
+      
+
+(defn newgrape []
+  "DSL form to create a new graph"
+  (let [g (->
+         (dbquery (str "create (g:`__Graph` {uid: apoc.create.uuid()}) return g"))
+         first :g :uid list)]
+    (set-graph! g)
+    g))
+
 
 
 (defn node-os
   "DSL form for specifying a node"
   [id rest]
-   (let [check-syntax (partial check-syntax-generic
-                               (str "NODE   :- ( node <HANDLE> <PROP> ) \n"
-                                    "PROP   :-  <LABEL> <ASSERT> <OID> <OPT> \n"
-                                    "LABEL  :- :label *string* \n"
-                                    "ASSERT :- :asserts {KEYVAL*} \n"
-                                    "OID    :- :oid *number*"
-                                    "KEYVAL :- KEY *string* \n"
-                                    "HANDLE :- *symbol* \n"
-                                    "KEY    :- *keyword* \n"
-                                    "OPT    := :merge true | :opt true"
-                                    ))]
-     (check-syntax (symbol? id) "HANDLE should be a symbol."))
-   ['node (assoc rest :id id)])
+  (let [check-syntax (partial check-syntax-generic
+                              (str "NODE   :- ( node <HANDLE> <PROP> ) \n"
+                                   "PROP   :-  <LABEL> <ASSERT> <OID> <OPT> \n"
+                                   "LABEL  :- :label *string* \n"
+                                   "ASSERT :- :asserts {KEYVAL*} \n"
+                                   "OID    :- :oid *number*"
+                                   "KEYVAL :- KEY *string* \n"
+                                   "HANDLE :- *symbol* \n"
+                                   "KEY    :- *keyword* \n"
+                                   "OPT    := :merge true | :opt true"))]
+    (check-syntax (symbol? id) "HANDLE should be a symbol."))
+  ['node (assoc rest :id id)])
 
 (defn node [& args]
   (let [handle (if (even? (count args))
@@ -589,7 +477,7 @@
                  (rest args))]
 
     (node-os handle (zipmap (take-nth 2 r)
-                          (take-nth 2 (rest r))))))
+                            (take-nth 2 (rest r))))))
 
 (defn edge-os
   "DSL form for specifying an edge"
@@ -621,7 +509,7 @@
                  args
                  (rest args))]
     (edge-os handle (zipmap (take-nth 2 r)
-                          (take-nth 2 (rest r))))))
+                            (take-nth 2 (rest r))))))
 
 (defn path
   "DSL form for specifying an edge"
@@ -635,15 +523,14 @@
 (defn pattern
   "DSL form for specifying a graph patterns"
   [& xs]
-  (let [
-         check-syntax (partial check-syntax-generic
-                               (str "PATTERN :- ( pattern <MTYPE> ELEM+ ) \n"
-                                    "MTYPE   :- :iso | :homo \n"
-                                    "ELEM    :- (node ...) | (edge ...) | (NAC ...) | (condition ...) | (assign ...)"))]
+  (let [check-syntax (partial check-syntax-generic
+                              (str "PATTERN :- ( pattern <MTYPE> ELEM+ ) \n"
+                                   "MTYPE   :- :iso | :homo \n"
+                                   "ELEM    :- (node ...) | (edge ...) | (NAC ...) | (condition ...) | (assign ...)"))]
     (let [f (first xs)
           r (if (keyword? f) (rest xs) xs)
           m (if (= f :iso) :iso :homo)]
-      (if (symbol? f) (check-syntax (valid-schema (s/either :homo :iso) f) "MTYPE must be :iso or :homo") )
+      (if (symbol? f) (check-syntax (valid-schema (s/either :homo :iso) f) "MTYPE must be :iso or :homo"))
       (check-syntax (valid-children #{'node 'edge 'NAC 'cond 'assign 'path} r) "ELEM must be node, edge, NAC, condition, assign, or path")
       ['pattern {:sem m :els r}])))
 
@@ -657,7 +544,7 @@
 (defn bind
   "Binds a value from a rule application (e) to a name (n)"
   [n e]
-    ['__bind n e])
+  ['__bind n e])
 
 (defn consult [n]
   "resolves value bound to a given name (n)"
@@ -677,181 +564,517 @@
       ['NAC id (apply pattern r)])))
 
 (defn rule-os
-  "DSL form for specifying a graph transformation"
+  "Helper function to create GT Rule"
   [n params prop]
-   (let [check-syntax (partial check-syntax-generic
-                               (str "RULE          :- ( rule NAME <[PAR+]>  <:theory 'spo|'dpo> <:read PATTERN> <:delete [ID+]> <:create PATTERN>  ) \n"
-                                    "NAME, PAR, ID :- *symbol* \n"
-                                    "PATTERN       := (pattern ...)"))]
-     (check-syntax (symbol? n) "rule name must be a symbol")
-     (if (not (empty? params))
-       (check-syntax (valid-schema [s/Symbol] params) "rule parameter list must be sequence of symbols"))
-     (check-syntax (subset? (set (keys prop)) #{:read :delete :create :theory}) "unknown part of rule. Rules can only have :theory :read, :delete and :create parts")
-     (if (contains? prop :read) (check-syntax (= 'pattern (first (:read prop))) "'read' part of rule must contain a pattern"))
-     (if (contains? prop :create) (check-syntax (= 'pattern (first (:create prop))) "'create' part of rule must contain a pattern"))
-     (if (contains? prop :delete) (check-syntax (valid-schema [s/Symbol] (:delete prop)) "'delete' part must specify sequence of symbols"))
-     (if (contains? prop :delete) (check-syntax (contains? prop :read) "'delete' part requires 'read' part to be present"))
-     (if (contains? prop :theory) (check-syntax (valid-schema s/Symbol (:theory prop)) "theory must be a symbol"))
+  (let [check-syntax (partial check-syntax-generic
+                              (str "RULE          :- ( rule NAME <[PAR+]>  <:theory 'spo|'dpo> <:read PATTERN> <:delete [ID+]> <:create PATTERN>  ) \n"
+                                   "NAME, PAR, ID :- *symbol* \n"
+                                   "PATTERN       := (pattern ...)"))]
+    (check-syntax (symbol? n) "rule name must be a symbol")
+    (if (not (empty? params))
+      (check-syntax (valid-schema [s/Symbol] params) "rule parameter list must be sequence of symbols"))
+    (check-syntax (subset? (set (keys prop)) #{:read :delete :create :theory}) "unknown part of rule. Rules can only have :theory :read, :delete and :create parts")
+    (if (contains? prop :read) (check-syntax (= 'pattern (first (:read prop))) "'read' part of rule must contain a pattern"))
+    (if (contains? prop :create) (check-syntax (= 'pattern (first (:create prop))) "'create' part of rule must contain a pattern"))
+    (if (contains? prop :delete) (check-syntax (valid-schema [s/Symbol] (:delete prop)) "'delete' part must specify sequence of symbols"))
+    (if (contains? prop :delete) (check-syntax (contains? prop :read) "'delete' part requires 'read' part to be present"))
+    (if (contains? prop :theory) (check-syntax (valid-schema s/Symbol (:theory prop)) "theory must be a symbol"))
 
-     (let [r (assoc prop :params params)
-           s (if (not (contains? prop :theory))
+    (let [r (assoc prop :params params)
+          r2 (if (not (contains? prop :theory))
                (assoc r :theory 'spo)
-               r)]
+               r)
+          s (if (not (contains? prop :delete))
+              (assoc r :delete [])
+              r2)]
        ;(validate-rule s)
-       (add-rule! n s)
-       (let [sym (symbol n)]
-         (intern *ns* sym (fn [& par] (attempt (transact (cons sym par) )))))
-       (intern *ns* (symbol (str (name n) "-dot")) (fn [] (rule->dot n s)))
-       ((intern *ns* (symbol (str (name n) "-show")) (fn [] (show (rule->dot n s)))))
-       )))
+      (add-rule! n s)
+      (intern *ns* (symbol (str (name n))) (fn [g & par] (exec g n par)))
+      (intern *ns* (symbol (str (name n) "*")) (fn [g & par] (exec* g n par)))
+      (intern *ns* (symbol (str (name n) "-dot")) (fn [] (rule->dot n s)))
+      ((intern *ns* (symbol (str (name n) "-show")) (fn [] (show (rule->dot n s))))))))
 
 (defn rule [n & args]
+  "DSL form for specifying a graph transformation"
   (if (even? (count args))
     (rule-os n [] (zipmap (take-nth 2 args)
-                        (take-nth 2 (rest args))))
+                          (take-nth 2 (rest args))))
     (rule-os n (first args) (zipmap (take-nth 2 (rest args))
-                                  (take-nth 2 (rest (rest args)))))))
+                                    (take-nth 2 (rest (rest args)))))))
 
-
-
-
-(defn document-rule [r]
-  (let [dir (java.io.File. "doc/images")]
-    (when (not (.exists dir))
-      (.mkdirs dir)))
-  (dorothy/save! (rule->dot r (r (rules))) (str "doc/images/" (name r) ".png") {:format :png}))
-
-(defn document-rules []
-  (map document-rule (keys (rules))))
-
-  (rule 'delete-any-node!
-    :read (pattern (node 'n))
-    :delete ['n])
-
-  (defn clear! []
-    (while (delete-any-node!)))
+(defn realLabel [ls]
+  (first (filter #(not (or (= % "__Node") (= % "__Edge"))) ls)))
 
 
 
 
 
-(defn qdata->dot [[k v]]
-  (str (name k) "='" v "'"))
-
-(defn qnode->dot [n]
-  (str " n" (-> n :metadata :id)
-       " [label=\"{" (-> n :metadata :id) ":" (-> n :metadata :label)
-       (if (empty? (:data n))
-         " "
-         " | ")
-       (str/join "; " (mapv qdata->dot (:data n)))
-       "}\"] "
-  ))
-
-(defn qedge->dot [e]
-  (str " n" (-> e :start)
-       " -> "
-       " n" (-> e :end)
-       " [label=\"" (-> e :metadata :label)
-       " "
-       (str/join "; " (mapv qdata->dot (:data e)))
-       "\"] "
-       ))
-
-(defn query->dot [g]
-  (if (empty? g)
-    "digraph L {} "
-   (let [r (if (map? g)
-            g
-            (reduce (fn [m n] (merge-with into m n))  g)
-            )]
-      (str "digraph L {   node [shape=Mrecord]; "
-       (str/join (mapv qnode->dot (:nodes r)))
-       (str/join (mapv qedge->dot (:edges r)))
-       "}"))))
-
-(defn oid [handle]
-  (let [o (-> (deref ret-atom)
-            (keywordize-keys)
-            ((keyword handle)))]
-    (if (nil? o)
-      -1
-      o)))
+(defn query [n params pat]
+  "DSL form for specifying a graph query"
+  (let [s {:read pat :params params}]
+    (add-query! n s)
+    (intern *ns* (symbol (str (name n))) (fn [g & par] (test-query g n par)))
+    (intern *ns* (symbol (str (name n) "-")) (fn [g & par] (test-query-neg g n par)))
+     (intern *ns* (symbol (str (name n)">")) (fn [g & par] (exec-query g n par)))
+    (intern *ns* (symbol (str (name n) "-dot")) (fn [] (query->dot n s)))
+    ((intern *ns* (symbol (str (name n) "-show")) (fn [] (show (query->dot n s)))))))
 
 
-(defn view [g]
-  (-> g
-      query->dot
-      show))
 
-(def diagram show)
+(defn occnodes [g kind]
+  "return the occurance of kind nodes for graph g"
+  (let [qstr (str "match(g:`__Graph` {uid:'" g "'}) -[e:" kind "]->(n:`__Node`) "
+                  " RETURN n{.*, labels: labels(n), id:ID(n), handle:e.handle}  ")]
+         (map first(dbquery qstr))))
 
-(rule 'any?
-  :read (pattern
-                 (node 'n)
-                 (node 'm)
-                 (edge :src 'n :tar 'm :opt true)
-                 ))
+(defn occdelnodes [g]
+  (occnodes g "delete"))
 
-  (rule 'any-edge ['l]
-    :read
-    (pattern
-      (node 's)
-      (node 't)
-      (edge 'e :label "&l" :src 's :tar 't)
-      ))
+(defn occaddnodes [g]
+  (occnodes g "create"))
 
-  (rule 'to-many ['l]
-    :read
-    (pattern :iso
-      (node 's)
-      (node 't)
-      (edge 'e :label "&l" :src 's :tar 't)
-      (node 'o)
-      (edge 'f :label "&l" :src 's :tar 'o)
-      ))
+(defn occkeepnodes [g]
+  (occnodes g "read"))
 
-  (rule 'from-many ['l]
-    :read
-    (pattern :iso
-      (node 's)
-      (node 't)
-      (edge 'e :label "&l" :src 's :tar 't)
-      (node 'o)
-      (edge 'f :label "&l" :src 'o :tar 't)
-      ))
+(defn occedges [g kind]
+  "return the occurance of kind nodes for graph g"
+  (let [qstr (str "match(g:`__Graph` {uid:'" g "'}) -[:" kind "]->(e:`__Edge`) 
+                      WITH * match (e)-[:src]->(s)
+                      WITH * match (e)-[:tar]->(t)
+                      RETURN e{.*, labels: labels(e), src: ID(s), tar: ID(t)}  ")]
+    (map first(dbquery qstr))))
 
-  (defn src-types [e ls]
-    (declare-violation
-      (str "Source nodes of " e " edges should be typed on of " ls)
-      (fn [] (if ((test 'any-edge e))
-               (reduce (fn [b n]
-                         (let [node (nsel "s" (:nodes n))
-                               label (-> node :metadata :label)]
-                           (or b (not (some #(= label %) ls)))))
-                       false
-                       (matches))))))
 
-  (defn tar-types [e ls]
-    (declare-violation
-      (str "Target nodes of " e " edges should be typed on of " ls)
-      (fn [] (if ((test 'any-edge e))
-               (reduce (fn [b n]
-                         (let [node (nsel "t" (:nodes n))
-                               label (-> node :metadata :label)]
-                           (or b (not (some #(= label %) ls)))))
-                       false
-                       (matches))))))
 
-  (defn to-one [e]
-    (declare-violation
-      (str "Target node of " e " edges should be unique")
-      (test 'to-many e)))
+(defn occdeledges [g]
+  (occedges g "delete"))
 
-  (defn from-one [e]
-    (declare-violation
-      (str "Source node of " e " edges should be unique")
-      (test 'from-many e)))
+(defn occaddedges [g]
+  (occedges g "create"))
 
-(defn browse []
-  (-> any? matches view))
+(defn occkeepedges [g]
+  (occedges g "read"))
+
+(defn occgraphs [g]
+  "search for g and its provenance"
+  (let [res (->
+             (dbquery  (str "match(g:`__Graph` {uid:'" g "'}) "
+                             " OPTIONAL MATCH(g)-[e:prov]->(p) return g,e,p"))
+             first)]
+    {:g (-> res :g :uid)
+     :p (-> res :p :uid)
+     :r (-> res :e :rule)}))
+
+
+(defn occ- [g]
+  (assoc (occgraphs g)
+         :keepnodes (occkeepnodes g)
+         :delnodes (occdelnodes g)
+         :addnodes (occaddnodes g)
+         :keepedges (occkeepedges g)
+         :deledges (occdeledges g)
+         :addedges (occaddedges g)))
+
+(defn occ [gs]
+  (map occ- gs))
+
+
+(defn n->dot [n color]
+  (let [handle   (getHandle n)
+        id (getId n)
+        label  (-> n getLabels realLabel)
+        attrs  (->> (getAttrs n)
+                    (map #(str (-> % first name) ":" (-> % second pr-str))))
+        attrstr (apply str (interpose "\n" attrs))]
+    (str id " [shape=record penwidth=bold label=\"{" handle ":" label
+         (if (not (empty? attrstr))
+           (str " | " (str/escape attrstr {\" "'"}))
+           "")
+         "("id")"
+         "}\" color=" color " fontcolor=" color " ] ")))
+
+
+(defn nd->dot [n]
+  (n->dot n "red"))
+
+(defn na->dot [n]
+  (n->dot n "forestgreen"))
+(defn nk->dot [n]
+  (n->dot n "black"))
+
+(defn e->dot [e color]
+  (let [label  (-> e getLabels realLabel)
+        src  (getSrc e)
+        tar  (getTar e)
+        attrs  (->> (getAttrs e)
+                    (map #(str (-> % first name) ":" (-> % second pr-str))))
+        attrstr (apply str (interpose ", " attrs))]
+    (str src " -> " tar "[ label= \"" label 
+         (if (not (empty? attrstr))
+           (str "{" (str/escape attrstr {\" "'"}) "}")
+           "")
+       "\" color=" color " fontcolor= " color "]")))
+
+
+(defn ek->dot [e]
+  (e->dot e "black"))
+
+(defn ed->dot [e]
+  (e->dot e "red"))
+
+(defn ea->dot [e]
+  (e->dot e "forestgreen"))
+
+(defn viewocc- [g]
+  "view the graph occurance"
+  (let [o (occ- g)
+        g2 (or (:g o) "  EMPTY ")
+        g1 (or (:p o) "NOTFOUND")
+        rn (-> o :r)]
+    (->
+     (str "digraph G { subgraph cluster_p  { 
+           label = <" g1 (comment (subs g1 0 8))
+          " &#8212;<b>" rn "</b>&#8594; " g2 (comment (subs g2 0 8)) "> "
+          (apply str (map nk->dot (:keepnodes o))) "\n"
+          (apply str (map nd->dot (:delnodes o))) "\n"
+          (apply str (map na->dot (:addnodes o))) "\n"
+          (apply str (map ek->dot (:keepedges o))) "\n"
+          (apply str (map ed->dot (:deledges o))) "\n"
+          (apply str (map ea->dot (:addedges o))) "\n"
+          " } }")
+     show)))
+
+(defn viewocc [gs]
+  (map viewocc- gs))
+
+(defn step->dot [r]
+  (let [uid1 (-> r :g1 :uid)
+        tag (-> r :g1 :tag)
+        id1  (-> r :g1 :id)]
+    (str id1 "[label=\"" (or tag (subs uid1 0 8)) "\"]")))
+
+
+(defn prov->dot [r]
+  (let [rule (-> r :e :rule)
+        src  (-> r :g2 :id)
+        tar  (-> r :g1 :id)]
+    (if (or (nil? src) (nil? tar))
+      " "
+      (str tar " -> " src "[label=\"" rule "\"]"))))
+
+(defn- viewproc- [g]
+  "view the graph process"
+  (let [p (dbquery (str "match (g1:`__Graph`)-[:prov*0..]-(:`__Graph`{uid:\"" g "\"}) OPTIONAL match (g2)-[e:prov]->(g1:`__Graph`) return g1{.*, id:ID(g1)},e{.*},g2{.*, id:ID(g2)}"))
+        nodes (map step->dot p)
+        nodeStr (apply str (interpose " \n " nodes))
+        edges (map prov->dot p)
+        edgeStr (apply str (interpose " \n " edges))
+        complete   (str "digraph D { "
+                        nodeStr
+                        " "
+                        edgeStr
+                        "}")]
+    (show complete)))
+
+(defn viewproc [gs]
+  "view the graph process"
+  (viewproc- (first gs)))
+
+
+
+
+(defn result->dot [res]
+  (let [nodes (filter (fn [x] (some #(= "__Node" %) (getLabels x))) res)
+        nodeStr (apply str (map nk->dot nodes))
+        edges (filter (fn [x] (some #(= "__Edge" %) (getLabels x))) res)
+        edgeStr (apply str (map ek->dot edges))
+        graphs (filter (fn [x] (empty? (getLabels x))) res)]
+    (str "digraph g { splines=true overlap=false subgraph cluster0 {"
+         "label=\"GRAPH: " (or (-> graphs first  getTag)
+                               (-> graphs first second :uid)) "\"; \n"
+         nodeStr
+         " \n "
+         edgeStr
+         (if (empty? (str nodeStr edgeStr)) "e [label=\"empty graph\" shape=none]" "")
+         " }} ")))
+
+(defn n->view [n]
+  (let [id   (-> n (:metadata) (:id))
+        label  (-> n (:metadata) (:labels) (realLabel))
+        attrs  (->> (:data n)
+                    (map #(str (-> % first name) ":" (-> % second pr-str))))
+        attrstr (apply str (interpose "\n" attrs))]
+    {:id id
+     :label (str id ":" label
+                 (if (not (empty? attrstr))
+                   (str "\n" (str/escape attrstr {\" "'"}))
+                   ""))}))
+    
+(defn e->view [e]
+  (let [label  (-> e :metadata :labels realLabel)
+        src  (-> e :data :src)
+        tar  (-> e :data :tar)]
+    {:from src
+     :to tar
+     :label label
+     :arrows {:to {:enabled true}}}))
+    
+
+
+(defn result->view [res]
+  (let [nodes (filter (fn [x] (some #(= "__Node" %) (-> x :metadata :labels))) res)
+        nodesV (map n->view nodes)
+        nodesVD (reduce (fn [res n] (if (some #(= (:id %) (:id n)) res)
+                                      res
+                                      (conj res n))) 
+                        '() nodesV)
+        edges (filter (fn [x] (some #(= "__Edge" %) (-> x :metadata :labels))) res)
+        edgesV (map e->view edges)
+        graphs (filter (fn [x] (some #(= "__Graph" %) (-> x :metadata :labels))) res)]
+    (if (empty? (-> graphs first getId))
+      {:nodes [:id 0 :shape "text" :label "(empty)"]}
+      {:nodes (vec (concat [{:id 0
+                             :label (str "Graph: " (or (-> graphs first :data :tag)
+                                                       (-> graphs first :data :uid)))
+                             :shape "text"
+                             :font {:size 20 :bold true}}]
+                           nodesVD))
+       :edges edgesV})))
+
+
+
+;(defn viewquery [res] 
+;  (->> res (apply concat) result->dot show))
+
+
+(defn viewquery [ress]
+ (let [ses (map #(apply concat %) ress)]
+   (map #(-> % result->dot show) ses)))
+
+
+(defn browsequery [res]
+  (-> res result->view gorillagraph/view))
+
+(query '_any? []
+       (pattern (node '_ :opt true)
+                (node '__ :opt true)
+                (edge 'e :src '_ :tar '__ :opt true)))
+
+
+
+
+
+(defn view [gs]
+  (viewquery (_any?> gs)))
+
+(defn browsegraph [g]
+  (-> (_any? g) browsequery))
+
+
+
+(defn isConfluent? [g]
+  (not (empty? (dbquery (str "MATCH (g:`__Graph` {uid:'" g "'})"
+                             "-[:conf]->(g2)-[:prov*0..]->(g0)<-[:prov*0..]-(g) "
+                             " return g.uid")))))
+(defn removeConfluent [gr]
+  (filter #(not (isConfluent? %)) gr))
+
+
+(defmacro ->* [start test & ops]
+  (list 'let ['res 
+                (list 'loop ['g start]
+        (list 'if (list 'empty? 'g)
+              'g
+              (list 'let ['s (list test 'g)]
+                    (list 'if (list 'empty? 's)
+                          (list 'recur (concat (list '-> 'g) 
+                                               ops
+                                               (list 'removeConfluent)))
+                          's))))]
+        (list 'set-graph! 'res)
+        'res))
+
+(defmacro ->*! [start test & ops]
+  (list 'loop ['g start]
+        (list 'if (list 'empty? 'g)
+              'g
+              (list 'let ['s (list test 'g)]
+                    (list 'if (list 'empty? 's)
+                          (list 'recur (concat (list '-> 'g)
+                                               ops
+                                               ))
+                          's)))))
+
+(comment
+(rule 'setup-ferryman
+      :create
+      (pattern
+       (node 'tg :label "Thing" :asserts {:kind "'Goat'"})
+       (node 'tc :label "Thing" :asserts {:kind "'Grape'"})
+       (node 'tw :label "Thing" :asserts {:kind "'Wolf'"})
+       (node 's1 :label "Side" :asserts {:name "'This side'"})
+       (node 's2 :label "Side" :asserts {:name "'Other side'"})
+       (node 'f  :label "Ferry")
+       (edge :label "is_at" :src 'tg :tar 's1)
+       (edge :label "is_at" :src 'tc :tar 's1)
+       (edge :label "is_at" :src 'tw :tar 's1)
+       (edge :label "is_at" :src 'f :tar 's1)))
+
+
+
+
+(rule 'ferry_one_over
+      :read
+      (pattern :iso
+               (node 's1 :label "Side")
+               (node 's2 :label "Side")
+               (node 'f :label "Ferry")
+               (node 't :label "Thing")
+               (edge 'et :label "is_at" :src 't :tar 's1)
+               (edge 'e :label "is_at" :src 'f :tar 's1))
+      :delete ['e 'et]
+      :create
+      (pattern
+       (edge :label "is_at" :src 'f :tar 's2)
+       (edge :label "is_at" :src 't :tar 's2)))
+
+(rule 'cross_empty
+      :read
+      (pattern :iso
+               (node 's1 :label "Side")
+               (node 's2 :label "Side")
+               (node 'f :label "Ferry")
+               (edge 'e :label "is_at" :src 'f :tar 's1))
+      :delete ['e]
+      :create
+      (pattern
+       (edge :label "is_at" :src 'f :tar 's2)))
+
+(query 'wolf-can-eat-goat? []
+       (pattern :iso
+                (node 't1 :label "Thing" :asserts {:kind "'Wolf'"})
+                (node 't2 :label "Thing" :asserts {:kind "'Goat'"})
+                (node 's :label "Side")
+                (node 's2 :label "Side")
+                (edge :label "is_at" :src 't1 :tar 's)
+                (edge :label "is_at" :src 't2 :tar 's)
+                (node 'f :label "Ferry")
+                (edge :label "is_at" :src 'f :tar 's2)))
+
+(query 'goat-can-eat-grape? []
+       (pattern :iso
+                (node 't1 :label "Thing" :asserts {:kind "'Grape'"})
+                (node 't2 :label "Thing" :asserts {:kind "'Goat'"})
+                (node 's :label "Side")
+                (node 's2 :label "Side")
+                (edge :label "is_at" :src 't1 :tar 's)
+                (edge :label "is_at" :src 't2 :tar 's)
+                (node 'f :label "Ferry")
+                (edge :label "is_at" :src 'f :tar 's2)))
+
+(query 'all_on_the_other_side? []
+       (pattern
+        (node 'tg :label "Thing" :asserts {:kind "'Goat'"})
+        (node 'tc :label "Thing" :asserts {:kind "'Grape'"})
+        (node 'tw :label "Thing" :asserts {:kind "'Wolf'"})
+        (node 's2 :label "Side" :asserts {:name "'Other side'"})
+        (edge :label "is_at" :src 'tg :tar 's2)
+        (edge :label "is_at" :src 'tc :tar 's2)
+        (edge :label "is_at" :src 'tw :tar 's2)))
+
+(debug! true)
+
+(tufte/add-basic-println-handler!
+ {:format-pstats-opts {:columns [:n-calls :p50 :mean :clock :total]
+                       :format-id-fn name}})
+
+(defn solve []
+  (->* (-> (newgrape) setup-ferryman)
+       all_on_the_other_side?
+       (|| ferry_one_over*
+           cross_empty*)
+       wolf-can-eat-goat?-
+       goat-can-eat-grape?-))
+
+)
+
+(comment 
+
+
+
+
+
+(macroexpand '(->* (-> (newgrape) setup-ferryman)
+                   all_on_the_other_side?
+                   (|| ferry_one_over*
+                           cross_empty*)
+                   wolf-can-eat-goat?-
+                   goat-can-eat-grape?-)))
+
+
+
+(comment
+ (->* (-> (newgrape) setup-ferryman)
+       all_on_the_other_side?
+       (|| ferry_one_over*
+               cross_empty*)
+       wolf-can-eat-goat?-
+       goat-can-eat-grape?-)
+)
+
+(comment
+
+(rule 'hello
+      :create (pattern
+               (node :label "Hello")))
+  
+  (rule 'killhello
+        :read (pattern
+                 (node 'n :label "Hello"))
+        :delete ['n]
+        )
+
+(query 'getHello []
+       (pattern
+               (node :label "Hello")))  
+
+(rule 'world
+      :read 	(pattern
+              (node 'h :label "Hello"))
+      :create	(pattern
+               (node 'w :label "World")
+               (edge :src 'h :tar 'w :label "to")))
+
+(rule 'vine
+      :read 	(pattern
+              (node 'h :label "Hello")
+              (node 'w :label "World")
+              (edge 'e :src 'h :tar 'w :label "to"))
+      :delete ['w 'e]
+      :create	(pattern
+               (node 'g :label "Grape")
+               (edge :src 'h :tar 'g :label "to")))
+
+(rule 'vin2
+      :read 	(pattern
+              (node 'h :label "Hello")
+              (node 'w :label "World")
+              (edge 'e :src 'h :tar 'w :label "to"))
+      :delete ['e]
+      :create	(pattern
+               (node 'g :label "Grape")
+               (edge :src 'h :tar 'g :label "to")))
+(rule 'rel
+      :read 	(pattern
+              (node 'h :label "Hello")
+              (node 'h2 :label "Hello"))
+      :create	(pattern
+               (edge :src 'h :tar 'h2 :label "rel")))
+)
+
+
+;)
+
+
+
+              
