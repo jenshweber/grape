@@ -11,7 +11,8 @@
    [grape.tx-cypher :refer :all]
    [environ.core :refer [env]]
    [neo4j-clj.core :as db]
-   [gorilla-graph.core :as gorillagraph])
+   [gorilla-graph.core :as gorillagraph]
+   [taoensso.tufte :as tufte :refer (defnp p profiled profile)])
    (:import (java.net URI)))
 
 (use 'clojure.walk)
@@ -156,9 +157,7 @@
      (if (empty? label) ":__Node" (str ":__Node:" label))
      (asserts->cypher [] ass)
      ")"
-     "<-[:create]-(:`__Graph`)"
-     "<-[:prov*0..]-(_g)"
-     " where not (" handle ") <-[:delete]-(:`__Graph`)<-[:prov*0..]-(_g) ")))
+     "WHERE ID(" handle ") IN _active ")))
 
 (defn readnode->cypher2 [n]
   (let [handle (-> n second :id)]
@@ -184,8 +183,7 @@
        " match (") 
      (:src p) ")<-["(:id p)"_s:src]-(" (:id p) ":`__Edge`" 
      (if (empty? (:label p)) "" (str ":" (:label p))) ")-["(:id p)"_t:tar]->(" (:tar p) ")"
-     " WHERE (" (:id p) ") <-[:create]-(:`__Graph`)<-[:prov*0..]-(_g)"
-     " AND NOT (" (:id p) ") <-[:delete]-(:`__Graph`)<-[:prov*0..]-(_g) ")))
+     " WHERE ID(" (:id p) ") IN _active ")))
 
 (defn createedge->cypher [e]
   (let [p (second e)
@@ -235,7 +233,11 @@
         edgesToRead (filter-elem 'edge (-> r :read second :els))
         edgesToReadStr (apply str (interpose " WITH * " (map readedge->cypher edgesToRead)))
         edgesToReturnStr (apply str (interpose "," (map readnodeRet->cypher edgesToRead)))
-        qstr (str "MATCH (_g:`__Graph` {uid:\"" g "\"}) WITH * "
+        qstr (str "MATCH (_g:`__Graph` {uid:\"" g "\"}) "
+                  " WITH * call { with _g optional match (_g)-[:prov*0..]->()-[:create]->(oc)"
+                  " with * optional match (_g)-[:prov*0..]->()-[:delete]->(od)"
+                  " return apoc.coll.subtract(collect(ID(oc)), collect(ID(od))) as _active } "
+                  " WITH * "
                   nodesToReadStr
                   " WITH * " edgesToReadStr
 
@@ -243,13 +245,13 @@
                     (let [st (gen-constraint-isomorphism nodesToRead edgesToRead)]
                       (if (empty? st)
                         ""
-                        (str " WITH * WHERE " st )))
+                        (str " WITH * WHERE " st)))
                     "")
 
                   " RETURN _g "
                   (if (not (empty? nodesToReturnStr)) (str "," nodesToReturnStr))
                   (if (not (empty? edgesToReturnStr)) (str "," edgesToReturnStr)))]
-   (dbquery qstr)))
+   (p ::search (dbquery qstr))))
 
 
 (defn getHandle [e]  (-> e first name))
@@ -326,7 +328,7 @@
         gn))))
 
 
-(defn exec [gs n par]
+(defnp exec [gs n par]
   (let [res (map #(exec- % n par) gs)
         gn (reduce concat res)]
     (if (not (empty? gn))
@@ -340,7 +342,7 @@
       gn)))
 
 
-(defn exec* [gs n par]
+(defnp exec* [gs n par]
   (let [res (map #(exec*- % n par) gs)
         gn (reduce concat res)]
     (if (not (empty? gn))
@@ -358,6 +360,9 @@
 
 
         qstr (str "MATCH (_g:`__Graph` {uid:\"" g "\"}) "
+                  " WITH * call { with _g optional match (_g)-[:prov*0..]->()-[:create]->(oc)"
+                                 " with * optional match (_g)-[:prov*0..]->()-[:delete]->(od)"
+                                 " return apoc.coll.subtract(collect(ID(oc)), collect(ID(od))) as _active } "
                   " WITH * "
                   nodesToReadStr
                   " WITH * " edgesToReadStr
@@ -373,9 +378,9 @@
                     (str "," edgesToReturnStr)))]
 ;    (apply concat (->> (dbquery qstr)
 ;         (map #(into [] %))))))
-    (dbquery qstr)))
+    (p ::query (dbquery qstr))))
 
-(defn exec-query [gs n par]
+(defnp exec-query [gs n par]
   (let [res (map #(exec-query- % n par) gs)]
     (remove empty? res)))
 
@@ -978,6 +983,19 @@
         (edge :label "is_at" :src 'tw :tar 's2)))
 
 (debug! true)
+
+(tufte/add-basic-println-handler!
+ {:format-pstats-opts {:columns [:n-calls :p50 :mean :clock :total]
+                       :format-id-fn name}})
+
+(defn solve []
+  (->* (-> (newgrape) setup-ferryman)
+       all_on_the_other_side?
+       (|| ferry_one_over*
+           cross_empty*)
+       wolf-can-eat-goat?-
+       goat-can-eat-grape?-))
+
 )
 
 (comment 
@@ -1005,6 +1023,7 @@
 )
 
 (comment
+
 (rule 'hello
       :create (pattern
                (node :label "Hello")))
@@ -1051,8 +1070,10 @@
               (node 'h2 :label "Hello"))
       :create	(pattern
                (edge :src 'h :tar 'h2 :label "rel")))
-
 )
+
+
+;)
 
 
 

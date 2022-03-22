@@ -623,3 +623,9 @@ profiles.clj
 .clj-kondo/.cache/v1/cljs/taoensso.truss.transit.json
 .lsp/.cache/db.transit.json
 .calva/output-window/output.calva-repl
+.clj-kondo/.cache/v1/clj/b.transit.json
+.clj-kondo/.cache/v1/clj/bol.transit.json
+.clj-kondo/.cache/v1/clj/bolt.transit.json
+.clj-kondo/.cache/v1/clj/boltte.transit.json
+.clj-kondo/.cache/v1/clj/bolttest.transit.json
+.clj-kondo/.cache/v1/clj/example.core.transit.json
