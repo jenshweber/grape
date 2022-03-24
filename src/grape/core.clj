@@ -27,7 +27,7 @@
 
 (def rules-atom (atom {}))
 (def queries-atom (atom {}))
-(def constraints-atom (atom '()))
+(def constraints-atom (atom '{}))
 
 (def debug-atom (atom false))
 
@@ -49,16 +49,22 @@
 (defn queries []
   (deref queries-atom))
 
-(defn set-graph! [g] 
+(defn constraints []
+  (deref constraints-atom))
+
+(defn set-grape! [g] 
   (intern 'grape.core '_ g))
 
-(set-graph! "nil")
+(set-grape! "nil")
 
 (defn add-rule! [n s]
   (swap! rules-atom (fn [c] (assoc c n s))))
 
 (defn add-query! [n s]
   (swap! queries-atom (fn [c] (assoc c n s))))
+
+(defn add-constraint! [n s]
+  (swap! constraints-atom (fn [c] (assoc c n s))))
 
 (def conn (try
          (-> (db/connect (URI. "bolt://localhost:7687")
@@ -253,6 +259,32 @@
                   (if (not (empty? edgesToReturnStr)) (str "," edgesToReturnStr)))]
    (p ::search (dbquery qstr))))
 
+(defn- search-if [g n]
+  (let [r ((constraints) n)
+        nodesToRead (filter-elem 'node (-> r :if second :els))
+        nodesToReadStr (apply str (interpose " WITH * " (map readnode->cypher nodesToRead)))
+        nodesToReturnStr (apply str (interpose "," (map readnodeRet->cypher nodesToRead)))
+        edgesToRead (filter-elem 'edge (-> r :if second :els))
+        edgesToReadStr (apply str (interpose " WITH * " (map readedge->cypher edgesToRead)))
+        edgesToReturnStr (apply str (interpose "," (map readnodeRet->cypher edgesToRead)))
+        qstr (str "MATCH (_g:`__Graph` {uid:\"" g "\"}) "
+                  " WITH * call { with _g optional match (_g)-[:prov*0..]->()-[:create]->(oc)"
+                  " with * optional match (_g)-[:prov*0..]->()-[:delete]->(od)"
+                  " return apoc.coll.subtract(collect(ID(oc)), collect(ID(od))) as _active } "
+                  " WITH * "
+                  nodesToReadStr
+                  " WITH * " edgesToReadStr
+
+                  (let [st (gen-constraint-isomorphism nodesToRead edgesToRead)]
+                    (if (empty? st)
+                      ""
+                      (str " WITH * WHERE " st)))
+
+                  " RETURN _g "
+                  (if (not (empty? nodesToReturnStr)) (str "," nodesToReturnStr))
+                  (if (not (empty? edgesToReturnStr)) (str "," edgesToReturnStr)))]
+    (p ::search (dbquery qstr))))
+
 
 (defn getHandle [e]  (-> e first name))
 
@@ -282,10 +314,6 @@
         itemsDeleteStr (if (empty? (:delete r))
                          " "
                          (str " WITH * "(apply str (interpose " WITH * " (map delitem->cypher (:delete r))))))
-        nodesToRead (filter-elem 'node (-> r :read second :els))
-        nodesToReadStr2 (if (empty? nodesToRead)
-                          ""
-                          (str " WITH * "(apply str (interpose " WITH * " (map readnode->cypher2 nodesToRead)))))
         nodesToCreate (filter-elem 'node (-> r :create second :els))
         nodesToCreateStr (if (empty? nodesToCreate)
                            ""
@@ -298,8 +326,8 @@
                   nodesToRematchStr
                   " WITH * " edgesToRematchStr
                   " CREATE (_gn:`__Graph`{uid: apoc.create.uuid()})-[:prov{rule:\"" n "\"}]->(_g) "
+                  " WITH * "
                   nodesToCreateStr
-                  nodesToReadStr2
                   edgesToCreateStr
                   itemsDeleteStr
 
@@ -309,7 +337,7 @@
                   " set _gn._fps = apoc.coll.sort(_fps)"
                   " with _gn set _gn._fp=apoc.hashing.fingerprint (_gn, ['uid']) "
                   "with _gn optional match (_gconf:`__Graph`{`_fp`:_gn.`_fp`}) " 
-                  " where ID(_gn) <> ID(_gconf) "
+                  " where  ID(_gn) <> ID(_gconf) and exists ((_gconf)-[:prov*0..]->()<-[:prov*0..]-(_gn) )"
                   " create (_gn)-[:conf]->(_gconf)"
                  " RETURN _gn {.uid}")]
     (->
@@ -319,12 +347,47 @@
      list)))
 
 
+(defn check-one-then [g n redex]
+  (let [r ((constraints) n)
+        nodesToRematch (filter (fn [x] (some #(= "__Node" %) (-> x second :labels))) redex)
+        nodesToRematchStr (apply str (map nodeRem->cypher nodesToRematch))
+        ifnodes (filter-elem 'node (-> r :if second :els))
+        ifedges (filter-elem 'edge (-> r :if second :els))
+        edgesToRematch (filter (fn [x] (some #(= "__Edge" %) (-> x second :labels))) redex)
+        edgesToRematchStr (apply str (map nodeRem->cypher edgesToRematch))
+        nodesToRead (filter-elem 'node (-> r :then second :els))
+        nodesToReadStr (if (empty? nodesToRead)
+                         ""
+                         (str " WITH * " (apply str (interpose " WITH * " (map readnode->cypher nodesToRead)))))
+        edgesToRead (filter-elem 'edge (-> r :then second :els))
+        edgesToReadStr (apply str (interpose " WITH * " (map readedge->cypher edgesToRead)))
+
+        qstr (str "MATCH (_g:`__Graph` {uid:\"" g "\"}) WITH * "
+                  nodesToRematchStr
+                  " WITH * " edgesToRematchStr
+                  " WITH * call { with _g optional match (_g)-[:prov*0..]->()-[:create]->(oc)"
+                  " with * optional match (_g)-[:prov*0..]->()-[:delete]->(od)"
+                  " return apoc.coll.subtract(collect(ID(oc)), collect(ID(od))) as _active } "
+                  " WITH * "
+                  nodesToReadStr
+                  " "
+                  edgesToReadStr
+                  " "
+                  (let [st (gen-constraint-isomorphism
+                            (concat nodesToRead ifnodes)
+                            (concat edgesToRead ifedges))]
+                    (if (empty? st)
+                      ""
+                      (str " WITH * WHERE " st)))
+                  " RETURN _g {.uid}")]
+    (not (empty? (dbquery qstr)))))
+
 (defn- exec- [g n par]
   (let [redexes (search g n par)]
     (if (empty? redexes)
       nil
       (let [gn (derive g n par (first redexes))]
-        (set-graph! gn)
+        (set-grape! gn)
         gn))))
 
 
@@ -332,7 +395,7 @@
   (let [res (map #(exec- % n par) gs)
         gn (reduce concat res)]
     (if (not (empty? gn))
-            (set-graph! gn))
+            (set-grape! gn))
     gn))
 
 (defn- exec*- [g n par]
@@ -346,7 +409,7 @@
   (let [res (map #(exec*- % n par) gs)
         gn (reduce concat res)]
     (if (not (empty? gn))
-      (set-graph! gn))
+      (set-grape! gn))
     gn))
 
 (defn- exec-query- [g n par]
@@ -372,7 +435,7 @@
                         ""
                         (str " WITH * WHERE " st)))
                     "")
-                  " RETURN _g{.*}," nodesToReturnStr 
+                  " RETURN _g{.uid}," nodesToReturnStr 
                   (if (empty? edgesToReturnStr)
                     ""
                     (str "," edgesToReturnStr)))]
@@ -384,28 +447,27 @@
   (let [res (map #(exec-query- % n par) gs)]
     (remove empty? res)))
 
-(defn- test-query- [g n par]
-  (if (empty? (exec-query- g n par))
-    nil
-    g))
 
-(defn- test-query-neg- [g n par]
-  (if (empty? (exec-query- g n par))
-    g
-    nil))
+(defn- check-constraint [g n]
+  (loop [rs (search-if g n)]
+    (if (empty? rs)
+      true
+      (let [c (check-one-then g n (first rs))]
+        (if c (recur (rest rs))
+            false)))))
 
-(defn test-query [gs n par]
-  (let [res (map #(test-query- % n par) gs)]
+(defn filter-constraint [gs n]
+  (let [res (map #(if (check-constraint % n) % nil) gs)]
     (remove empty? res)))
 
-(defn test-query-neg [gs n par]
-  (let [res (map #(test-query-neg- % n par) gs)]
+(defn filter-constraint-neg [gs n]
+  (let [res (map #(if (check-constraint % n) nil %) gs)]
     (remove empty? res)))
-
+ 
 
 (defn || [g & rs]
   (let [res (flatten (map #(% g) rs))]
-   (set-graph! res)
+   (set-grape! res)
    res ))
 
 (defn rollback []
@@ -438,7 +500,7 @@
                "NOT FOUND"
                (-> res first :g :uid))]
     (when (not (= "NOT FOUND" id))
-      (set-graph! (list id)))
+      (set-grape! (list id)))
     (list id)))
       
 
@@ -447,7 +509,7 @@
   (let [g (->
          (dbquery (str "create (g:`__Graph` {uid: apoc.create.uuid()}) return g"))
          first :g :uid list)]
-    (set-graph! g)
+    (set-grape! g)
     g))
 
 
@@ -613,11 +675,22 @@
   "DSL form for specifying a graph query"
   (let [s {:read pat :params params}]
     (add-query! n s)
-    (intern *ns* (symbol (str (name n))) (fn [g & par] (test-query g n par)))
-    (intern *ns* (symbol (str (name n) "-")) (fn [g & par] (test-query-neg g n par)))
-     (intern *ns* (symbol (str (name n)">")) (fn [g & par] (exec-query g n par)))
+    (intern *ns* (symbol (str (name n))) (fn [g & par] (exec-query g n par)))
     (intern *ns* (symbol (str (name n) "-dot")) (fn [] (query->dot n s)))
     ((intern *ns* (symbol (str (name n) "-show")) (fn [] (show (query->dot n s)))))))
+
+
+(defn constraint 
+  ([n ip tp]
+   (let [s {:if ip :then tp}]
+     (add-constraint! n s)
+     (intern *ns* (symbol (str (name n))) (fn [g] (filter-constraint g n)))
+     (intern *ns* (symbol (str (name n) "-")) (fn [g] (filter-constraint-neg g n)))
+
+     (intern *ns* (symbol (str (name n) "-dot")) (fn [] (constraint->dot n s)))
+     ((intern *ns* (symbol (str (name n) "-show")) (fn [] (show (constraint->dot n s)))))))
+  ([n tp]
+   (constraint n (pattern) tp)))
 
 
 
@@ -750,8 +823,11 @@
 (defn step->dot [r]
   (let [uid1 (-> r :g1 :uid)
         tag (-> r :g1 :tag)
-        id1  (-> r :g1 :id)]
-    (str id1 "[label=\"" (or tag (subs uid1 0 8)) "\"]")))
+        id1  (-> r :g1 :id)
+        orig    (-> r :gc nil?)]
+    (str id1 "[label=\"" (or tag (subs uid1 0 8)) "\""
+         (if orig "" " style = diagonals" )
+         "]")))
 
 
 (defn prov->dot [r]
@@ -762,18 +838,32 @@
       " "
       (str tar " -> " src "[label=\"" rule "\"]"))))
 
+(defn conf->dot [r]
+  (let [src  (-> r :g1 :id)
+        tar  (-> r :gc :id)]
+    (if (nil? tar)
+      " "
+      (str src " -> " tar "[constraint=false style=dashed color=blue]"))))
+
 (defn- viewproc- [g]
   "view the graph process"
-  (let [p (dbquery (str "match (g1:`__Graph`)-[:prov*0..]-(:`__Graph`{uid:\"" g "\"}) OPTIONAL match (g2)-[e:prov]->(g1:`__Graph`) return g1{.*, id:ID(g1)},e{.*},g2{.*, id:ID(g2)}"))
+  (let [p (dbquery (str "match (g1:`__Graph`)-[:prov*0..]-(:`__Graph`{uid:\"" g "\"}) "
+                        "OPTIONAL match (g2)-[e:prov]->(g1:`__Graph`) "
+                        " with * call { with g1 optional match (g1)-[c:conf]->(gc) return gc limit 1} "
+                        " with * return g1{.*, id:ID(g1)},e{.*},g2{.*, id:ID(g2)}, gc{id:ID(gc)}"))
         nodes (map step->dot p)
         nodeStr (apply str (interpose " \n " nodes))
         edges (map prov->dot p)
         edgeStr (apply str (interpose " \n " edges))
+        cedges (map conf->dot p)
+        cedgeStr (apply str (interpose " \n " cedges))
         complete   (str "digraph D { "
-                        "size=\"10,20\" "
+                        "size=\"8,20\" "
                         nodeStr
                         " "
                         edgeStr
+                        " "
+                        cedgeStr
                         "}")]
     (show complete)))
 
@@ -866,7 +956,7 @@
 
 
 (defn view [gs]
-  (viewquery (_any?> gs)))
+  (viewquery (_any? gs)))
 
 (defn browsegraph [g]
   (-> (_any? g) browsequery))
@@ -892,7 +982,7 @@
                                                ops
                                                (list 'removeConfluent)))
                           's))))]
-        (list 'set-graph! 'res)
+        (list 'set-grape! 'res)
         'res))
 
 (defmacro ->*! [start test & ops]
@@ -1075,7 +1165,3 @@
 
 
 ;)
-
-
-
-              
