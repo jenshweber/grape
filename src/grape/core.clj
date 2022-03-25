@@ -313,33 +313,38 @@
         edgesToRematchStr (apply str (map nodeRem->cypher edgesToRematch))
         itemsDeleteStr (if (empty? (:delete r))
                          " "
-                         (str " WITH * "(apply str (interpose " WITH * " (map delitem->cypher (:delete r))))))
+                         (str " WITH * " (apply str (interpose " WITH * " (map delitem->cypher (:delete r))))))
+        nodesToRead (filter-elem 'node (-> r :read second :els))
+        nodesToReadStr2 (if (empty? nodesToRead)
+                          ""
+                          (str " WITH * " (apply str (interpose " WITH * " (map readnode->cypher2 nodesToRead)))))
         nodesToCreate (filter-elem 'node (-> r :create second :els))
         nodesToCreateStr (if (empty? nodesToCreate)
                            ""
-                           (str " WITH * " (apply str (interpose " WITH * " (map createnode->cypher nodesToCreate))))) 
+                           (str " WITH * " (apply str (interpose " WITH * " (map createnode->cypher nodesToCreate)))))
         edgesToCreate (filter-elem 'edge (-> r :create second :els))
         edgesToCreateStr (if (empty? edgesToCreate)
                            ""
-                           (str " WITH * "(apply str (interpose " WITH * " (map createedge->cypher edgesToCreate)))))
+                           (str " WITH * " (apply str (interpose " WITH * " (map createedge->cypher edgesToCreate)))))
         qstr (str "MATCH (_g:`__Graph` {uid:\"" g "\"}) WITH * "
                   nodesToRematchStr
                   " WITH * " edgesToRematchStr
                   " CREATE (_gn:`__Graph`{uid: apoc.create.uuid()})-[:prov{rule:\"" n "\"}]->(_g) "
                   " WITH * "
                   nodesToCreateStr
+                  nodesToReadStr2
                   edgesToCreateStr
                   itemsDeleteStr
 
                   "with _gn optional match (_gn) -[:prov*0..]->()-[:create]->(_el) "
                   " where not (_gn) -[:prov*0..]->()-[:delete]->(_el) "
-                  " with _gn, collect (distinct _el._fp) as _fps "
+                  " with _gn, collect (_el._fp) as _fps "
                   " set _gn._fps = apoc.coll.sort(_fps)"
                   " with _gn set _gn._fp=apoc.hashing.fingerprint (_gn, ['uid']) "
-                  "with _gn optional match (_gconf:`__Graph`{`_fp`:_gn.`_fp`}) " 
+                  "with _gn optional match (_gconf:`__Graph`{`_fp`:_gn.`_fp`}) "
                   " where  ID(_gn) <> ID(_gconf) and exists ((_gconf)-[:prov*0..]->()<-[:prov*0..]-(_gn) )"
                   " create (_gn)-[:conf]->(_gconf)"
-                 " RETURN _gn {.uid}")]
+                  " RETURN _gn {.uid}")]
     (->
      (dbquery qstr)
      first
@@ -386,17 +391,47 @@
   (let [redexes (search g n par)]
     (if (empty? redexes)
       nil
-      (let [gn (derive g n par (first redexes))]
-        (set-grape! gn)
-        gn))))
+      (derive g n par (first redexes)))))
 
 
+(defn- get-inv [g]
+  (->
+   (dbquery (str "MATCH (g:`__Graph`{uid:\"" (first g) "\"})-[:prov*0..]->(gs) "
+                 " with gs optional match (gs)-[:_inve]->(inve) "
+                 " with * optional match (gs)-[:_inva]->(inva) "
+                 " return collect(inve.name) as enforced, "
+                 " collect(inva.name) as asserted "))
+   first))
+
+
+(defn enforce- [g constrs]
+  (loop [gc g
+         cs constrs]
+    (if (empty? cs)
+      gc
+      (recur ((first cs) gc) (rest cs)))))
+
+(defn- check-invariants [gr]
+   (let [invs (get-inv gr) 
+         ge (enforce- gr (map #(-> % symbol eval)
+                              (:enforced invs)))]
+     (doseq [g ge]
+       (doseq [c (:asserted invs)]
+         (if (empty? ((eval (symbol c)) (list g)))
+           (do
+             (set-grape! (list g))
+             (throw (Exception.
+                     (str "Asserted invariant '" c "' violated for graph " g)))))))
+     ge))
+         
 (defnp exec [gs n par]
   (let [res (map #(exec- % n par) gs)
-        gn (reduce concat res)]
-    (if (not (empty? gn))
-            (set-grape! gn))
-    gn))
+        gn (reduce concat res) 
+        gne (check-invariants gn)
+        ]
+    (if (not (empty? gne))
+            (set-grape! gne))
+    gne))
 
 (defn- exec*- [g n par]
   (let [redexes (search g n par)]
@@ -407,10 +442,11 @@
 
 (defnp exec* [gs n par]
   (let [res (map #(exec*- % n par) gs)
-        gn (reduce concat res)]
-    (if (not (empty? gn))
-      (set-grape! gn))
-    gn))
+        gn (reduce concat res)
+        gne (check-invariants gn)]
+    (if (not (empty? gne))
+      (set-grape! gne))
+    gne))
 
 (defn- exec-query- [g n par]
   (let [r ((queries) n)
@@ -692,6 +728,33 @@
   ([n tp]
    (constraint n (pattern) tp)))
 
+(defn constraint-clause [n & cs]
+  (intern *ns* (symbol (str (name n))) (fn [g] (apply (partial || g) cs))))
+
+
+(defn add-inv [g c t]
+  (dbquery (str "MATCH (g:`__Graph`{uid:\"" g "\"})"
+                " create (g)-[:_" t "]->(i:`__Inv`{name:\"" c "\"})")))
+
+(defmacro enforce-invariant [g & constrs]
+  
+  (list 'let ['g- (list 'enforce- g (vec constrs))]
+    (list 'doseq ['i 'g-] 
+      (list 'doseq ['c (list 'quote constrs)]
+        (list 'add-inv 'i 'c "inve")))
+    'g-))
+
+(defmacro assert-invariant [g & constrs]
+
+  (list 'let ['g- (list 'enforce- g (vec constrs))]
+        (list 'doseq ['i 'g-]
+              (list 'doseq ['c (list 'quote constrs)]
+                    (list 'add-inv 'i 'c "inva")))
+        'g-))
+
+
+
+
 
 
 (defn occnodes [g kind]
@@ -826,7 +889,6 @@
         id1  (-> r :g1 :id)
         orig    (-> r :gc nil?)]
     (str id1 "[label=\"" (or tag (subs uid1 0 8)) "\""
-         (if orig "" " style = diagonals" )
          "]")))
 
 
@@ -985,6 +1047,18 @@
         (list 'set-grape! 'res)
         'res))
 
+(defmacro ->** [start & ops]
+  (list 'let ['res
+              (list 'loop ['g start]
+                    (list 'if (list 'empty? 'g)
+                          'g
+                          (list 'recur (concat (list '-> 'g)
+                                               ops
+                                               (list 'removeConfluent)))))
+                                      ]
+        (list 'set-grape! 'res)
+        'res))
+
 (defmacro ->*! [start test & ops]
   (list 'loop ['g start]
         (list 'if (list 'empty? 'g)
@@ -1118,7 +1192,11 @@
 (rule 'hello
       :create (pattern
                (node :label "Hello")))
-  
+
+(constraint 'c1 (pattern (node :label "Hello")))
+
+
+;(comment 
   (rule 'killhello
         :read (pattern
                  (node 'n :label "Hello"))
