@@ -8,25 +8,21 @@
                  [org.clojure/data.json "0.2.6"]
                  [dorothy "0.0.6"]
                  [org.clojure/data.codec "0.1.0"]
-                 [prismatic/schema "1.0.5"]
-                 [clojurewerkz/neocons "3.2.0"]
- ;                [com.taoensso/timbre "4.3.1"]
                  [environ "1.0.2"]
                  [nano-id "0.9.3"]
                  [proto-repl "0.3.1"]
+                 [prismatic/schema "1.0.5"]
                  [gorilla-graph "0.1.0-SNAPSHOT"]
-                 [org.clojars.benfb/gorilla-repl "0.6.0"]
                  [gorillalabs/neo4j-clj "4.1.2"]
                  [org.neo4j.driver/neo4j-java-driver "4.1.1"]
-                 [com.taoensso/tufte "2.2.0"]]
-  :plugins [[lein-environ "1.1.0"]
-            [org.clojars.benfb/lein-gorilla "0.6.0"]]
+                 [com.taoensso/tufte "2.2.0"]
+                 [org.clojars.jenshweber/grape-repl "0.7.1-SNAPSHOT"]]
+  :plugins [[org.clojars.jenshweber/lein-grape "0.7.0-SNAPSHOT"]
+            [lein-environ "1.1.0"]]
   :profiles {:dev {}}
   :test-path "test/"
   :jvm-opts ["-Xmx1g" "-server"]
-  :deploy-repositories [["clojars" {
-                                    :url "https://clojars.org/repo"
+  :deploy-repositories [["clojars" {:url "https://clojars.org/repo"
                                     :username :env/clojars_user
                                     :password  :env/clojars_pass
-                                    :sign-releases false}]]
-)
+                                    :sign-releases false}]])

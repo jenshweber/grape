@@ -1,9 +1,8 @@
 (ns grape.core
   (:require
    [clojure.math.combinatorics :as combo]
-   [schema.core :as s]
    [clojure.string :as str]
-   [clojure.set :refer [subset?]]    
+   [clojure.set :refer [subset?]]
    [grape.visualizer :refer :all]
    [grape.tx-cypher :refer :all]
    [grape.util :refer :all]
@@ -11,6 +10,7 @@
    [grape.tx-cypher :refer :all]
    [environ.core :refer [env]]
    [neo4j-clj.core :as db]
+   [schema.core :as s]
    [gorilla-graph.core :as gorillagraph]
    [taoensso.tufte :as tufte :refer (defnp p profiled profile)])
    (:import (java.net URI)))
@@ -305,7 +305,7 @@
         handle (getHandle n)]
     (str  " MATCH(" handle ") WHERE ID( " handle ")=" id)))
 
-(defn derive [g n pars redex]
+(defn derive- [g n pars redex]
   (let [r ((rules) n)
         nodesToRematch (filter (fn [x] (some #(= "__Node" %) (-> x second :labels))) redex)
         nodesToRematchStr (apply str (map nodeRem->cypher nodesToRematch))
@@ -391,7 +391,7 @@
   (let [redexes (search g n par)]
     (if (empty? redexes)
       nil
-      (derive g n par (first redexes)))))
+      (derive- g n par (first redexes)))))
 
 
 (defn- get-inv [g]
@@ -420,11 +420,11 @@
          (if (empty? ((eval (symbol c)) (list g)))
            (do
              (set-grape! (list g))
-             (throw (Exception.
+             (throw (AssertionError.
                      (str "Asserted invariant '" c "' violated for graph " g)))))))
      ge))
          
-(defnp exec [gs n par]
+(defn exec [gs n par]
   (let [res (map #(exec- % n par) gs)
         gn (reduce concat res) 
         gne (check-invariants gn)
@@ -435,12 +435,12 @@
 
 (defn- exec*- [g n par]
   (let [redexes (search g n par)]
-    (let [gns (map (partial derive g n par) redexes)
+    (let [gns (map (partial derive- g n par) redexes)
           gn (reduce concat gns)]
       gn)))
 
 
-(defnp exec* [gs n par]
+(defn exec* [gs n par]
   (let [res (map #(exec*- % n par) gs)
         gn (reduce concat res)
         gne (check-invariants gn)]
@@ -479,7 +479,7 @@
 ;         (map #(into [] %))))))
     (p ::query (dbquery qstr))))
 
-(defnp exec-query [gs n par]
+(defn exec-query [gs n par]
   (let [res (map #(exec-query- % n par) gs)]
     (remove empty? res)))
 
@@ -1015,7 +1015,7 @@
 
 
 
-
+(declare _any?)
 
 (defn view [gs]
   (viewquery (_any? gs)))
@@ -1153,13 +1153,7 @@
  {:format-pstats-opts {:columns [:n-calls :p50 :mean :clock :total]
                        :format-id-fn name}})
 
-(defn solve []
-  (->* (-> (newgrape) setup-ferryman)
-       all_on_the_other_side?
-       (|| ferry_one_over*
-           cross_empty*)
-       wolf-can-eat-goat?-
-       goat-can-eat-grape?-))
+
 
 )
 
@@ -1178,14 +1172,7 @@
 
 
 
-(comment
- (->* (-> (newgrape) setup-ferryman)
-       all_on_the_other_side?
-       (|| ferry_one_over*
-               cross_empty*)
-       wolf-can-eat-goat?-
-       goat-can-eat-grape?-)
-)
+
 
 (comment
 

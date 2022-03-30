@@ -1,17 +1,14 @@
 (ns grape.visualizer
   (:require
-   [clojure.data.json :as json]
-   [schema.core :as s]
    [clojure.string :as str]
    [clojure.set :refer :all]
    [dorothy.core :as dorothy]
    [clojure.data.codec.base64 :as b64]
    [grape.util :refer :all]
-   [clojure.java.io :as io]))
+   [clojure.java.io :as io]
+   [gorilla-repl.image :as image]))
 
 (import javax.imageio.ImageIO)
-
-(use 'gorilla-repl.image)
 
 (def ctr-atom (atom 0))
 
@@ -29,7 +26,7 @@
   (String. (b64/encode (dorothy/render g {:format :png}))))
 
 (defn show [g]
-  (image-view
+  (image/image-view
    (ImageIO/read
     (io/input-stream
 ;  (dorothy/save! (dorothy/render  g {:format :png}) "out.png")
