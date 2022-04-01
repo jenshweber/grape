@@ -16,8 +16,8 @@
                  [gorillalabs/neo4j-clj "4.1.2"]
                  [org.neo4j.driver/neo4j-java-driver "4.1.1"]
                  [com.taoensso/tufte "2.2.0"]
-                 [org.clojars.jenshweber/grape-repl "0.7.1-SNAPSHOT"]]
-  :plugins [[org.clojars.jenshweber/lein-grape "0.7.0-SNAPSHOT"]
+                 [org.clojars.benfb/gorilla-repl "0.6.0"]]
+  :plugins [[org.clojars.benfb/lein-gorilla "0.6.0"]
             [lein-environ "1.1.0"]]
   :profiles {:dev {}}
   :test-path "test/"

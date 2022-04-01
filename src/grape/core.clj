@@ -144,13 +144,14 @@
     (if (nil? par)
       s
       (resolve-value scope (clojure.string/replace s m (str (scope (symbol par))))))))
+
 (defn asserts->cypher [s as]
   "Translate a map of assertions to a Cypher code fragment"
   (if (empty? as)
     ""
     (str " {" (reduce (partial str-sep ", ") (map (fn [[k v]] (str (name k) ":" (resolve-value s v))) as)) "}")))
 
-(defn readnode->cypher [n]
+(defn readnode->cypher [n pars]
   (let [handle (-> n second :id)
         label (-> n second :label)
         opt (-> n second :opt)
@@ -161,7 +162,7 @@
        "match(")
      handle
      (if (empty? label) ":__Node" (str ":__Node:" label))
-     (asserts->cypher [] ass)
+     (asserts->cypher pars ass)
      ")"
      "WHERE ID(" handle ") IN _active ")))
 
@@ -170,12 +171,12 @@
     (str "create (" handle ")"
          "<-[:read{handle:'" handle "'}]-(_gn)")))
 
-(defn createnode->cypher [n]
+(defn createnode->cypher [n pars]
   (let [handle (-> n second :id)
         label (-> n second :label)
         ass (-> n second :asserts)]
     (str " create(" handle ":" label ":__Node"
-         (asserts->cypher [] ass)
+         (asserts->cypher pars ass)
          ")"
          "<-[:create{handle:'" handle "'}]-(_gn)  "
          "set " handle "._fp=apoc.hashing.fingerprint("handle") ")))
@@ -233,8 +234,9 @@
 
 (defn search [g n pars]
   (let [r ((rules) n)
+        scope (zipmap (:params r) pars)
         nodesToRead (filter-elem 'node (-> r :read second :els))
-        nodesToReadStr (apply str (interpose " WITH * " (map readnode->cypher nodesToRead)))
+        nodesToReadStr (apply str (interpose " WITH * " (map #(readnode->cypher % scope) nodesToRead)))
         nodesToReturnStr (apply str (interpose "," (map readnodeRet->cypher nodesToRead)))
         edgesToRead (filter-elem 'edge (-> r :read second :els))
         edgesToReadStr (apply str (interpose " WITH * " (map readedge->cypher edgesToRead)))
@@ -262,7 +264,7 @@
 (defn- search-if [g n]
   (let [r ((constraints) n)
         nodesToRead (filter-elem 'node (-> r :if second :els))
-        nodesToReadStr (apply str (interpose " WITH * " (map readnode->cypher nodesToRead)))
+        nodesToReadStr (apply str (interpose " WITH * " (map #(readnode->cypher % []) nodesToRead)))
         nodesToReturnStr (apply str (interpose "," (map readnodeRet->cypher nodesToRead)))
         edgesToRead (filter-elem 'edge (-> r :if second :els))
         edgesToReadStr (apply str (interpose " WITH * " (map readedge->cypher edgesToRead)))
@@ -307,6 +309,7 @@
 
 (defn derive- [g n pars redex]
   (let [r ((rules) n)
+        scope (zipmap (:params r) pars)
         nodesToRematch (filter (fn [x] (some #(= "__Node" %) (-> x second :labels))) redex)
         nodesToRematchStr (apply str (map nodeRem->cypher nodesToRematch))
         edgesToRematch (filter (fn [x] (some #(= "__Edge" %) (-> x second :labels))) redex)
@@ -321,7 +324,7 @@
         nodesToCreate (filter-elem 'node (-> r :create second :els))
         nodesToCreateStr (if (empty? nodesToCreate)
                            ""
-                           (str " WITH * " (apply str (interpose " WITH * " (map createnode->cypher nodesToCreate)))))
+                           (str " WITH * " (apply str (interpose " WITH * " (map #(createnode->cypher % scope) nodesToCreate)))))
         edgesToCreate (filter-elem 'edge (-> r :create second :els))
         edgesToCreateStr (if (empty? edgesToCreate)
                            ""
@@ -363,7 +366,7 @@
         nodesToRead (filter-elem 'node (-> r :then second :els))
         nodesToReadStr (if (empty? nodesToRead)
                          ""
-                         (str " WITH * " (apply str (interpose " WITH * " (map readnode->cypher nodesToRead)))))
+                         (str " WITH * " (apply str (interpose " WITH * " (map #(readnode->cypher % []) nodesToRead)))))
         edgesToRead (filter-elem 'edge (-> r :then second :els))
         edgesToReadStr (apply str (interpose " WITH * " (map readedge->cypher edgesToRead)))
 
@@ -451,7 +454,7 @@
 (defn- exec-query- [g n par]
   (let [r ((queries) n)
         nodesToRead (filter-elem 'node (-> r :read second :els))
-        nodesToReadStr (apply str (interpose " WITH * " (map readnode->cypher nodesToRead)))
+        nodesToReadStr (apply str (interpose " WITH * " (map #(readnode->cypher % par) nodesToRead)))
         edgesToRead (filter-elem 'edge (-> r :read second :els))
         edgesToReadStr (apply str (interpose " WITH * " (map readedge->cypher edgesToRead)))
         nodesToReturnStr (apply str (interpose "," (map readnodeRet->cypher nodesToRead)))
@@ -565,17 +568,37 @@
                                    "OPT    := :merge true | :opt true"))]
     (check-syntax (symbol? id) "HANDLE should be a symbol."))
   ['node (assoc rest :id id)])
-
-(defn node [& args]
-  (let [handle (if (even? (count args))
+(comment
+(defn node- [h args]
+  (let [s (str/split (str h) #":")
+        s1 (first s)
+        s2 (second s)
+        id (if (or (empty? s1) (= "_" s1))
                  (symbol (random-id))
-                 (first args))
-        r      (if (even? (count args))
-                 args
-                 (rest args))]
+                 (symbol s1))
+        
+        argsmap (zipmap (take-nth 2 args)
+                        (take-nth 2 (rest args)))
+        args2 (if (empty? s2)
+                argsmap
+                (merge argsmap {:label s2}))]
+    (node-os id args2))))
 
-    (node-os handle (zipmap (take-nth 2 r)
-                            (take-nth 2 (rest r))))))
+(defn node- [h args]
+  (let [s (str/split (str h) #":")
+        s1 (first s)
+        s2 (second s)
+        as (or (some #(if (map? %) %) args) {})
+        op (or (some #(if (= :opt %) {:opt true}) args) {})
+        id (if (or (empty? s1) (= "_" s1))
+             (symbol (random-id))
+             (symbol s1))
+        lab (if (empty? s2) {} {:label s2})]
+    (node-os id (merge {:asserts as} op lab))))
+
+
+(defmacro node [h & args]
+  (list 'node- (list 'quote h) (list 'quote args)))
 
 (defn edge-os
   "DSL form for specifying an edge"
@@ -599,15 +622,26 @@
     )
   ['edge (assoc rest :id id)])
 
-(defn edge [& args]
-  (let [handle (if (even? (count args))
-                 (symbol (random-id))
-                 (first args))
-        r      (if (even? (count args))
-                 args
-                 (rest args))]
-    (edge-os handle (zipmap (take-nth 2 r)
-                            (take-nth 2 (rest r))))))
+(defn edge- [h src tar args]
+  (let [s (str/split (str h) #":")
+        s1 (first s)
+        s2 (second s)
+        id (if (or (empty? s1) (= "_" s1))
+             (symbol (random-id))
+             (symbol s1))
+        argsmap (zipmap (take-nth 2 args)
+                        (take-nth 2 (rest args)))
+        argsmap2 (merge {:src src :tar tar} argsmap)
+        args2 (if (empty? s2)
+                argsmap2
+                (merge argsmap2 {:label s2}))]
+    (edge-os id  args2)))
+
+(defmacro edge [h s t & args]
+  (list 'edge- (list 'quote h) 
+        (list 'quote s)
+        (list 'quote t)
+        (list 'quote args)))
 
 (defn path
   "DSL form for specifying an edge"
@@ -632,6 +666,15 @@
       (check-syntax (valid-children #{'node 'edge 'NAC 'cond 'assign 'path} r) "ELEM must be node, edge, NAC, condition, assign, or path")
       ['pattern {:sem m :els r}])))
 
+
+(defn read [& xs] 
+  {:read (apply pattern xs)})
+
+(defn create [& xs]
+  {:create (apply pattern xs)})
+
+(defmacro delete [& xs]
+  {:delete (list 'vec (list 'quote xs))})
 
 (defn condition [c]
   ['cond c])
@@ -692,22 +735,21 @@
       (intern *ns* (symbol (str (name n) "-dot")) (fn [] (rule->dot n s)))
       ((intern *ns* (symbol (str (name n) "-show")) (fn [] (show (rule->dot n s))))))))
 
-(defn rule [n & args]
-  "DSL form for specifying a graph transformation"
-  (if (even? (count args))
-    (rule-os n [] (zipmap (take-nth 2 args)
-                          (take-nth 2 (rest args))))
-    (rule-os n (first args) (zipmap (take-nth 2 (rest args))
-                                    (take-nth 2 (rest (rest args)))))))
 
 (defn realLabel [ls]
   (first (filter #(not (or (= % "__Node") (= % "__Edge"))) ls)))
 
+(defmacro rule [n pars & args]
+  (list 'rule-os 
+        (list 'quote n) 
+        (list 'quote pars) 
+        (list 'apply 'merge (list 'quote (map eval args)))))
 
 
 
 
-(defn query [n params pat]
+
+(defn query- [n params pat]
   "DSL form for specifying a graph query"
   (let [s {:read pat :params params}]
     (add-query! n s)
@@ -715,9 +757,15 @@
     (intern *ns* (symbol (str (name n) "-dot")) (fn [] (query->dot n s)))
     ((intern *ns* (symbol (str (name n) "-show")) (fn [] (show (query->dot n s)))))))
 
+(defmacro query [n params & cs]
+  (list 'query- 
+        (list 'quote n) 
+        (list 'quote params)
+        (list 'quote (apply pattern (map eval cs)))))
 
-(defn constraint 
-  ([n ip tp]
+
+(defn constraint- 
+  [n ip tp]
    (let [s {:if ip :then tp}]
      (add-constraint! n s)
      (intern *ns* (symbol (str (name n))) (fn [g] (filter-constraint g n)))
@@ -725,12 +773,27 @@
 
      (intern *ns* (symbol (str (name n) "-dot")) (fn [] (constraint->dot n s)))
      ((intern *ns* (symbol (str (name n) "-show")) (fn [] (show (constraint->dot n s)))))))
-  ([n tp]
-   (constraint n (pattern) tp)))
 
-(defn constraint-clause [n & cs]
+(defmacro constraint [n & args]
+  (list 'constraint- (list 'quote n) []
+        (list 'apply 'pattern (list 'quote (map eval args)))))
+
+(defn IF [& xs]
+  (apply pattern xs))
+
+(defn THEN [& xs]
+  (apply pattern xs))
+
+(defmacro cond-constraint [n ip tp]
+  (list 'constraint- (list 'quote n)  
+        (list 'quote (eval ip))
+         (list 'quote (eval tp))))
+
+(defn constraint-clause- [n cs]
   (intern *ns* (symbol (str (name n))) (fn [g] (apply (partial || g) cs))))
 
+(defmacro constraint-clause [n cs]
+  (list 'constraint-clause- (list 'quote n) cs))
 
 (defn add-inv [g c t]
   (dbquery (str "MATCH (g:`__Graph`{uid:\"" g "\"})"
@@ -814,6 +877,20 @@
 (defn occ [gs]
   (map occ- gs))
 
+
+(defn n->dot [n color]
+  (let [handle   (getHandle n)
+        id (getId n)
+        label  (-> n getLabels realLabel)
+        attrs  (->> (getAttrs n)
+                    (map #(str (-> % first name) ":" (-> % second pr-str))))
+        attrstr (apply str (interpose "\n" attrs))]
+    (str id " [shape=record penwidth=bold label=\"{" handle ":" label
+         (if (not (empty? attrstr))
+           (str " | " (str/escape attrstr {\" "'"}))
+           "")
+         "("id")"
+         "}\" color=" color " fontcolor=" color " ] ")))
 
 (defn n->dot [n color]
   (let [handle   (getHandle n)
@@ -996,22 +1073,19 @@
 
 
 
-;(defn viewquery [res] 
-;  (->> res (apply concat) result->dot show))
-
-
 (defn viewquery [ress]
  (let [ses (map #(apply concat %) ress)]
-   (map #(-> % result->dot show) ses)))
+   (map #(-> % distinct result->dot show) ses)))
 
 
 (defn browsequery [res]
   (-> res result->view gorillagraph/view))
 
-(query '_any? []
-       (pattern (node '_ :opt true)
-                (node '__ :opt true)
-                (edge 'e :src '_ :tar '__ :opt true)))
+(query _any? []
+       (node _1 :opt true)
+       (node _2 :opt true)
+       (edge e:__Edge x y :opt true))
+
 
 
 

@@ -150,7 +150,7 @@
         c (:create rule)
         p (:params rule)]
     (str "digraph g {  splines=true overlap=false subgraph cluster0 {  "
-         "label=\"Rule: " n (if (empty? p) "" (str p)) "\";"
+         "label=\"Rule: " n " " (str p) "\";"
          (pattern->dot r d "black" "red" "")
          (pattern->dot c [] "green" "green" "")
          "}}")))
