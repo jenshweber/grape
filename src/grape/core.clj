@@ -886,24 +886,10 @@
                     (map #(str (-> % first name) ":" (-> % second pr-str))))
         attrstr (apply str (interpose "\n" attrs))]
     (str id " [shape=record penwidth=bold label=\"{" handle ":" label
+         "(" id ")"
          (if (not (empty? attrstr))
            (str " | " (str/escape attrstr {\" "'"}))
            "")
-         "("id")"
-         "}\" color=" color " fontcolor=" color " ] ")))
-
-(defn n->dot [n color]
-  (let [handle   (getHandle n)
-        id (getId n)
-        label  (-> n getLabels realLabel)
-        attrs  (->> (getAttrs n)
-                    (map #(str (-> % first name) ":" (-> % second pr-str))))
-        attrstr (apply str (interpose "\n" attrs))]
-    (str id " [shape=record penwidth=bold label=\"{" handle ":" label
-         (if (not (empty? attrstr))
-           (str " | " (str/escape attrstr {\" "'"}))
-           "")
-         "("id")"
          "}\" color=" color " fontcolor=" color " ] ")))
 
 
@@ -984,34 +970,29 @@
       " "
       (str src " -> " tar "[constraint=false style=dashed color=blue]"))))
 
-(defn- viewproc- [g]
-  "view the graph process"
-  (let [p (dbquery (str "match (g1:`__Graph`)-[:prov*0..]-(:`__Graph`{uid:\"" g "\"}) "
-                        "OPTIONAL match (g2)-[e:prov]->(g1:`__Graph`) "
-                        " with * call { with g1 optional match (g1)-[c:conf]->(gc) return gc limit 1} "
-                        " with * return g1{.*, id:ID(g1)},e{.*},g2{.*, id:ID(g2)}, gc{id:ID(gc)}"))
-        nodes (map step->dot p)
-        nodeStr (apply str (interpose " \n " nodes))
-        edges (map prov->dot p)
-        edgeStr (apply str (interpose " \n " edges))
-        cedges (map conf->dot p)
-        cedgeStr (apply str (interpose " \n " cedges))
-        complete   (str "digraph D { "
-                        "size=\"8,20\" "
-                        nodeStr
-                        " "
-                        edgeStr
-                        " "
-                        cedgeStr
-                        "}")]
-    (show complete)))
 
-(defn viewproc [gs]
-  "view the graph process"
-  (viewproc- (first gs)))
-
-
-
+(defn history [gs]
+  (let [g (first gs)
+        qstr (str "match(g:`__Graph`{uid:\"" g "\"})
+                     -[:prov*0..]->(g0:`__Graph`) 
+                     where not exists( (g0)-[:prov]->() ) 
+                     with g0 create (gn:`__Graph`{uid:apoc.create.uuid()}) with g0,gn  
+                     match (g0)<-[:prov*0..]-(g1:`__Graph`) 
+                     with g0,g1,gn 
+                     create(g1g:Graph:`__Node`{uid:g1.uid, tag:g1.tag})<-[:create]-(gn) 
+                     with collect(distinct gn) as gnew 
+                     call {with gnew with head(gnew) as gn 
+                           match(gn)-[:create]->(g1g:Graph) 
+                          with * match(g1:`__Graph`{uid:g1g.uid})-[p:prov]->(g2:`__Graph`) 
+                          with * match(g2g:Graph {uid:g2.uid})<-[:create]-(gn) 
+                          with * create (gn)-[:create]->(e:__Edge:occ{rule:p.rule})-[:src]->(g2g) 
+                          with * create(e)-[:tar]->(g1g)
+                          set e.src=ID(g2g), e.tar=ID(g1g)} 
+                     with *
+                     return head(gnew).uid as gn")]
+            (map :gn (dbquery qstr)))
+  
+  )
 
 (defn result->dot [res]
   (let [nodes (filter (fn [x] (some #(= "__Node" %) (getLabels x))) res)
@@ -1067,7 +1048,7 @@
                              :label (str "Graph: " (or (-> graphs first :data :tag)
                                                        (-> graphs first :data :uid)))
                              :shape "text"
-                             :font {:size 20 :bold true}}]
+                             :font {:size 14 :bold true}}]
                            nodesVD))
        :edges edgesV})))
 
