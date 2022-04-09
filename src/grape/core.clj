@@ -474,7 +474,7 @@
                         ""
                         (str " WITH * WHERE " st)))
                     "")
-                  " RETURN _g{.uid}," nodesToReturnStr 
+                  " RETURN distinct _g{.uid}," nodesToReturnStr 
                   (if (empty? edgesToReturnStr)
                     ""
                     (str "," edgesToReturnStr)))]
@@ -878,14 +878,15 @@
   (map occ- gs))
 
 
-(defn n->dot [n color]
+
+(defn n->dot [n color pref]
   (let [handle   (getHandle n)
         id (getId n)
         label  (-> n getLabels realLabel)
         attrs  (->> (getAttrs n)
                     (map #(str (-> % first name) ":" (-> % second pr-str))))
         attrstr (apply str (interpose "\n" attrs))]
-    (str id " [shape=record penwidth=bold label=\"{" handle ":" label
+    (str "\"" pref id "\" [shape=record penwidth=bold label=\"{" handle ":" label
          "(" id ")"
          (if (not (empty? attrstr))
            (str " | " (str/escape attrstr {\" "'"}))
@@ -894,21 +895,21 @@
 
 
 (defn nd->dot [n]
-  (n->dot n "red"))
+  (n->dot n "red" ""))
 
 (defn na->dot [n]
-  (n->dot n "forestgreen"))
+  (n->dot n "forestgreen" ""))
 (defn nk->dot [n]
-  (n->dot n "black"))
+  (n->dot n "black" ""))
 
-(defn e->dot [e color]
+(defn e->dot [e color pref]
   (let [label  (-> e getLabels realLabel)
         src  (getSrc e)
         tar  (getTar e)
         attrs  (->> (getAttrs e)
                     (map #(str (-> % first name) ":" (-> % second pr-str))))
         attrstr (apply str (interpose ", " attrs))]
-    (str src " -> " tar "[ label= \"" label 
+    (str "\"" pref src "\" -> \"" pref tar "\" [ label= \"" label 
          (if (not (empty? attrstr))
            (str "{" (str/escape attrstr {\" "'"}) "}")
            "")
@@ -916,35 +917,55 @@
 
 
 (defn ek->dot [e]
-  (e->dot e "black"))
+  (e->dot e "black" ""))
 
 (defn ed->dot [e]
-  (e->dot e "red"))
+  (e->dot e "red" ""))
 
 (defn ea->dot [e]
-  (e->dot e "forestgreen"))
+  (e->dot e "forestgreen" ""))
 
-(defn viewocc- [g]
+
+(defn viewocc-- [g]
+  "view the graph occurance"
+  (let [o (occ- g)
+        g2 (or (:g o) "  EMPTY ")
+        rn (-> o :r)]
+    (str " subgraph \"cluster_" g2 "\"  { 
+           label = < &#8212;<b>" rn "</b>&#8594; > "
+         " \"" g2 "\" [label=\"\" style=invis]"
+         (apply str (map #(n->dot % "black" g2) (:keepnodes o))) "\n"
+         (apply str (map #(n->dot % "red" g2) (:delnodes o))) "\n"
+         (apply str (map #(n->dot % "forestgreen" g2) (:addnodes o))) "\n"
+         (apply str (map #(e->dot % "black" g2) (:keepedges o))) "\n"
+         (apply str (map #(e->dot % "red" g2) (:deledges o))) "\n"
+         (apply str (map #(e->dot % "forestgreen" g2) (:addedges o))) "\n"
+         " } ")))
+
+
+(defn viewoccrels-- [g]
   "view the graph occurance"
   (let [o (occ- g)
         g2 (or (:g o) "  EMPTY ")
         g1 (or (:p o) "NOTFOUND")
         rn (-> o :r)]
-    (->
-     (str "digraph G { subgraph cluster_p  { 
-           label = <" g1 (comment (subs g1 0 8))
-          " &#8212;<b>" rn "</b>&#8594; " g2 (comment (subs g2 0 8)) "> "
-          (apply str (map nk->dot (:keepnodes o))) "\n"
-          (apply str (map nd->dot (:delnodes o))) "\n"
-          (apply str (map na->dot (:addnodes o))) "\n"
-          (apply str (map ek->dot (:keepedges o))) "\n"
-          (apply str (map ed->dot (:deledges o))) "\n"
-          (apply str (map ea->dot (:addedges o))) "\n"
-          " } }")
-     show)))
+    (str " \"" g1 "\" -> \"" g2 "\" [ltail=\"cluster_" g1 "\" lhead=\"cluster_" g2 "\"] ")))
+ 
+(defn viewocc- [g]
+  (apply str (map viewocc-- g)))
 
-(defn viewocc [gs]
-  (map viewocc- gs))
+(defn viewoccrels- [g]
+  (apply str (map viewoccrels-- g)))
+
+
+(defn viewsteps [gs]
+  (let [clusters (map viewocc- gs)
+        rels     (map viewoccrels- gs)]
+    (-> (str "digraph G { " 
+       ;      "size=\"8,20\" "
+             (apply str (concat clusters rels))
+             "}")
+        show)))
 
 (defn step->dot [r]
   (let [uid1 (-> r :g1 :uid)
@@ -987,12 +1008,65 @@
                           with * match(g2g:Graph {uid:g2.uid})<-[:create]-(gn) 
                           with * create (gn)-[:create]->(e:__Edge:occ{rule:p.rule})-[:src]->(g2g) 
                           with * create(e)-[:tar]->(g1g)
-                          set e.src=ID(g2g), e.tar=ID(g1g)} 
+                          with * call { with g1 match (g1)-[p:prov*1..]->(gx:`__Graph`) return count(*) as steps}
+                          set e.src=ID(g2g), e.tar=ID(g1g),
+                              e.step=steps
+                                                } 
                      with *
                      return head(gnew).uid as gn")]
             (map :gn (dbquery qstr)))
   
   )
+
+(defn history [gs]
+  (let [g (first gs)
+        qstr (str "match(g:`__Graph`{uid:\"" g "\"})
+                     -[:prov*0..]->(g0:`__Graph`) 
+                     where not exists( (g0)-[:prov]->() ) 
+                     with g0 create (gn:`__Graph`{uid:apoc.create.uuid()}) with g0,gn  
+                     match (g0)<-[:prov*0..]-(g1:`__Graph`) 
+                     with g0,g1,gn 
+                     create(g1g:Graph:`__Node`{uid:g1.uid, tag:g1.tag})<-[:create]-(gn) 
+                     with collect(distinct gn) as gnew 
+                     call {with gnew with head(gnew) as gn 
+                           match(gn)-[:create]->(g1g:Graph) 
+                          with * match(g1:`__Graph`{uid:g1g.uid})-[p:prov]->(g2:`__Graph`) 
+                          with * match(g2g:Graph {uid:g2.uid})<-[:create]-(gn) 
+                          with * create (gn)-[:create]->(e:__Edge:occ{rule:p.rule})-[:src]->(g2g) 
+                          with * create(e)-[:tar]->(g1g)
+                          with * call { with g1 match (g1)-[p:prov*1..]->(gx:`__Graph`) return count(*) as steps}
+                          set e.src=ID(g2g), e.tar=ID(g1g),
+                              e.step=steps
+                                                } 
+                     with *
+                     return head(gnew).uid as gn")]
+            (map :gn (dbquery qstr)))
+  
+  )
+
+(defn- trace [g]
+  (let [qstr (str "match(g:`__Graph`{uid:\"" g "\"})
+                     with * create (gn:`__Graph`{uid:apoc.create.uuid()}) 
+                     with * match (g)-[:prov*0..]->(g1:`__Graph`) 
+                     with * 
+                     create(g1g:Graph:`__Node`{uid:g1.uid, tag:g1.tag})<-[:create]-(gn) 
+                     with collect(distinct gn) as gnew 
+                     call {with gnew with head(gnew) as gn 
+                           match(gn)-[:create]->(g1g:Graph) 
+                          with * match(g1:`__Graph`{uid:g1g.uid})-[p:prov]->(g2:`__Graph`) 
+                          with * match(g2g:Graph {uid:g2.uid})<-[:create]-(gn) 
+                          with * create (gn)-[:create]->(e:__Edge:occ{rule:p.rule})-[:src]->(g2g) 
+                          with * create(e)-[:tar]->(g1g)
+                          with * call { with g1 match (g1)-[p:prov*1..]->(gx:`__Graph`) return count(*) as steps}
+                          set e.src=ID(g2g), e.tar=ID(g1g),
+                              e.step=steps
+                                                } 
+                     with *
+                     return head(gnew).uid as gn")]
+    (map :gn (dbquery qstr))))
+
+(defn traces [gs]
+  (flatten (map trace gs)))
 
 (defn result->dot [res]
   (let [nodes (filter (fn [x] (some #(= "__Node" %) (getLabels x))) res)
@@ -1077,6 +1151,21 @@
 
 (defn browsegraph [g]
   (-> (_any? g) browsequery))
+
+(defn- merge-grapes [ds d] 
+  (let [curg0 (-> ds first :before)
+        curg1 (-> ds first :after)]
+    (if (= curg0 (:before d))
+      (conj (rest ds) {:before curg0 :after (conj curg1 (:after d))})
+      (conj ds {:before (:before d) :after (list (:after d))}))))
+
+(defn steps [g]
+  (let [res (dbquery (str "match (g:`__Graph`{uid:\"" (first g)"\"})
+                     -[:create]->(g1:Graph)<-[:tar]-(e:`__Edge`:occ)-[:src]->(g0:Graph) 
+                     return g1.uid as after, g0.uid as before, e.step as i order by i"))
+        gr (reduce merge-grapes '() res)]
+    (map :after (reverse gr))))
+
 
 
 
