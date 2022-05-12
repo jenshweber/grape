@@ -2,7 +2,7 @@
   (:require
    [clojure.math.combinatorics :as combo]
    [clojure.string :as str]
-   [clojure.set :refer [subset?]]
+   [clojure.set :refer [subset? difference]]
    [grape.visualizer :refer :all]
    [grape.tx-cypher :refer :all]
    [grape.util :refer :all]
@@ -233,6 +233,18 @@
           ei (map f ec)]
       (reduce (partial str-sep " AND ") (concat ni ei)))))
 
+(defn- exclothers [others ditem]
+  (map #(str " ID(" ditem ")<> ID(" % ") ") others))
+
+(defn gen-identification-condition [itemsToDelete nodes edges]
+  (if (empty? itemsToDelete)
+    ""
+    (let [others (difference (set (concat (all-ids nodes) (all-ids edges))) (set itemsToDelete))
+          ecls (map #(exclothers others %) itemsToDelete)
+          cstr (apply str (interpose " AND " (flatten ecls)))]
+      (if (empty? cstr) "" (str " WITH * WHERE " cstr))
+      )))
+
 (defn readnodeRet->cypher [n]
   (let [id (-> n second :id)]
     (str id "{.*, "
@@ -248,6 +260,7 @@
         nodesToReturnStr (apply str (interpose "," (map readnodeRet->cypher nodesToRead)))
         edgesToRead (filter-elem 'edge (-> r :read second :els))
         edgesToReadStr (apply str (interpose " WITH * " (map readedge->cypher edgesToRead)))
+        itemsToDelete (:delete r)
         edgesToReturnStr (apply str (interpose "," (map readnodeRet->cypher edgesToRead)))
         qstr (str "MATCH (_g:`__Graph` {uid:\"" g "\"}) "
                   " WITH * call { with _g optional match (_g)-[:prov*0..]->()-[:create]->(oc)"
@@ -262,7 +275,8 @@
                       (if (empty? st)
                         ""
                         (str " WITH * WHERE " st)))
-                    "")
+                    
+                      (gen-identification-condition itemsToDelete nodesToRead edgesToRead))
 
                   " RETURN _g "
                   (if (not (empty? nodesToReturnStr)) (str "," nodesToReturnStr))
@@ -912,7 +926,7 @@
                     (map #(str (-> % first name) ": " (-> % second pr-str))))
         attrstr (apply str (interpose " | " attrs))]
     (str "\"" pref id "\" [shape=Mrecord penwidth=bold style=filled fillcolor=aliceblue label=\"{" handle ":" label
-        ; "(" id ")"
+         "(" id ")"
          (if (not (empty? attrstr))
            (str " | " (str/escape attrstr {\" "'"}))
            "")
