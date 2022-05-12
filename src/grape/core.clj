@@ -28,6 +28,7 @@
 (def rules-atom (atom {}))
 (def queries-atom (atom {}))
 (def constraints-atom (atom '{}))
+(def suppressed-atom (atom '()))
 
 (def debug-atom (atom false))
 
@@ -51,6 +52,12 @@
 
 (defn constraints []
   (deref constraints-atom))
+
+(defn suppress [& args]
+  (swap! suppressed-atom (fn [_] args)))
+
+(defn suppressed []
+  (deref suppressed-atom))
 
 (defn set-grape! [g] 
   (intern 'grape.core '_ g))
@@ -202,7 +209,8 @@
          " SET " handle ".src=ID(" source "), "
          handle ".tar=ID(" target "), "
          handle "._fps=" source "._fp, "
-         handle "._fpt=" target "._fp "
+         handle "._fpt=" target "._fp, "
+         handle "._fpd= apoc.coll.different([ID( "source"), ID("target")]) " 
          "with * SET "
          handle "._fp=apoc.hashing.fingerprint("  handle 
                 ", ['tar', 'src']) ")))
@@ -299,8 +307,12 @@
 
 (defn getLabels [e]  (-> e second :labels))
 
-(defn getAttrs [e]  (-> e second (dissoc :labels :id :src :tar :handle
-                                         :_fp :_fps :_fpt)))
+(defn getAttrs [e]  (apply dissoc 
+                      (-> e second 
+                        (dissoc :labels :id :src :tar :handle
+                                         :_fp :_fps :_fpt :_fpd))
+                           (suppressed)))
+                        
 
 (defn nodeRem->cypher [n]
   (let [id   (getId n)
@@ -347,7 +359,14 @@
                   "with _gn optional match (_gconf:`__Graph`{`_fp`:_gn.`_fp`}) "
                   " where  ID(_gn) <> ID(_gconf) and exists ((_gconf)-[:prov*0..]->()<-[:prov*0..]-(_gn) )"
                   " create (_gn)-[:conf]->(_gconf)"
-                  " RETURN _gn {.uid}")]
+
+                  (if (empty? (:delete r)) ""
+                      (str 
+                      " with * call { with _gn match(_gn)-[:delete]->(_nd:`__Node`)<-[:tar]-(_e) "
+                      " merge (_gn)-[:delete]->(_e) } "
+                      " with * call { with _gn match(_gn)-[:delete]->(_nd:`__Node`)<-[:src]-(_e) "
+                      " merge (_gn)-[:delete]->(_e) } "))
+                      " RETURN _gn {.uid}")]
     (->
      (dbquery qstr)
      first
@@ -512,17 +531,23 @@
 (defn rollback []
   (dbquery "MATCH (gt:`__Graph`)-[:prov*0..]->(gp:`__Graph`) 
    WHERE gt.tag IS NOT NULL  with collect(gp.uid) as transacted 
-   match (g:`__Graph`) where g.tag IS NULL and not g.uid in transacted 
-   with * OPTIONAL MATCH (g) -[:create]->(i) detach delete g,i")
+   with transacted call { with transacted 
+            match (g:`__Graph`) where not g.uid in transacted 
+   with * OPTIONAL MATCH (g)-[:create]->(i) 
+   with * OPTIONAL MATCH (g)-[:inve]->(e) 
+   with * OPTIONAL MATCH (g)-[:inva]->(a) 
+            detach delete g,i,e,a }")
   true)
 
-(defn commit [gs t]
-    (let [res (dbquery (str "MATCH (g:`__Graph`{uid:\"" (first gs) 
+(defn commit [g t]
+  (if (string? g)
+    (let [res (dbquery (str "MATCH (g:`__Graph`{uid:\"" g 
                             "\"}) set g.tag=\"" t "\" return g"))
         id   (if (empty? res) 
                nil
                (-> res first :g :uid))]
-    id))
+    id)
+    (throw (Exception. "Commit can only be called on individual graphs."))))
 
 (defn uncommit [t]
   (let [res (dbquery (str "MATCH (g:`__Graph`{tag:\"" t
@@ -884,10 +909,10 @@
         id (getId n)
         label  (-> n getLabels realLabel)
         attrs  (->> (getAttrs n)
-                    (map #(str (-> % first name) ":" (-> % second pr-str))))
-        attrstr (apply str (interpose "\n" attrs))]
-    (str "\"" pref id "\" [shape=record penwidth=bold label=\"{" handle ":" label
-         "(" id ")"
+                    (map #(str (-> % first name) ": " (-> % second pr-str))))
+        attrstr (apply str (interpose " | " attrs))]
+    (str "\"" pref id "\" [shape=Mrecord penwidth=bold style=filled fillcolor=aliceblue label=\"{" handle ":" label
+        ; "(" id ")"
          (if (not (empty? attrstr))
            (str " | " (str/escape attrstr {\" "'"}))
            "")
@@ -931,9 +956,9 @@
   (let [o (occ- g)
         g2 (or (:g o) "  EMPTY ")
         rn (-> o :r)]
-    (str " subgraph \"cluster_" g2 "\"  { 
-           label = < &#8212;<b>" rn "</b>&#8594; > "
-         " \"" g2 "\" [label=\"\" style=invis]"
+    (str " subgraph \"cluster_" g2 "\"  { "
+                  " \"" g2 "\" [shape=point style=invis]"
+         "  label = < &#8212;<b>" rn "</b>&#8594; > "
          (apply str (map #(n->dot % "black" g2) (:keepnodes o))) "\n"
          (apply str (map #(n->dot % "red" g2) (:delnodes o))) "\n"
          (apply str (map #(n->dot % "forestgreen" g2) (:addnodes o))) "\n"
@@ -947,9 +972,9 @@
   "view the graph occurance"
   (let [o (occ- g)
         g2 (or (:g o) "  EMPTY ")
-        g1 (or (:p o) "NOTFOUND")
-        rn (-> o :r)]
-    (str " \"" g1 "\" -> \"" g2 "\" [ltail=\"cluster_" g1 "\" lhead=\"cluster_" g2 "\"] ")))
+        g1 (or (:p o) "NOTFOUND")]
+    (str " \"" g1 "\" [shape=point style=invis]"
+     " \"" g1 "\" -> \"" g2 "\" [ltail=\"cluster_" g1 "\" lhead=\"cluster_" g2 "\" ]; ")))
  
 (defn viewocc- [g]
   (apply str (map viewocc-- g)))
@@ -962,6 +987,7 @@
   (let [clusters (map viewocc- gs)
         rels     (map viewoccrels- gs)]
     (-> (str "digraph G { " 
+             "compound=true; "
        ;      "size=\"8,20\" "
              (apply str (concat clusters rels))
              "}")
@@ -1081,7 +1107,7 @@
          " \n "
          edgeStr
          (if (empty? (str nodeStr edgeStr)) "e [label=\"empty graph\" shape=none]" "")
-         " }} ")))
+         " graph[style=dotted]; } } ")))
 
 (defn n->view [n]
   (let [id   (-> n (:metadata) (:id))
@@ -1175,6 +1201,15 @@
                              " return g.uid")))))
 (defn removeConfluent [gr]
   (filter #(not (isConfluent? %)) gr))
+
+
+(defn isConfluent-loc? [g gr]
+  (not (empty? (dbquery (str "MATCH (g:`__Graph` {uid:'" g "'})"
+                             "<-[:conf]-(g2:`__Graph`) where g2.uid in [" gr "] "
+                             " return g.uid")))))
+(defn dist [gr]
+  (let [grs (apply str (interpose " , " (map #(str "'" % "'") gr)))]
+    (filter #(not (isConfluent-loc? % grs)) gr)))
 
 
 (defmacro ->* [start test & ops]

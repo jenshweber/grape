@@ -33,7 +33,6 @@
      (dorothy/render  g {:format :png})))))
 
 
-
 (defn asserts->dot [as]
   "Translate a map of assertions to Dot"
   (if (empty? as)
