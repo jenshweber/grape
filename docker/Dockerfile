@@ -1,8 +1,15 @@
-FROM neo4j:3.5.30
-RUN apt-get update && apt-get install -y \
-    graphviz \
-    leiningen
-COPY project.clj profiles.clj /var/lib/neo4j
-COPY scripts/docker-entrypoint.sh /
-COPY book/welcome.clj /var/lib/neo4j
+FROM clojure
+
+EXPOSE 8999
+EXPOSE 62222
+
+RUN apt-get install -y graphviz 
+
+COPY ./project.clj ./profiles.clj ./welcome.clj /usr/src/app
+
+WORKDIR /usr/src/app/
+
+RUN lein deps
+
+CMD lein gorilla :port 8999 :nrepl-port 62222
 
