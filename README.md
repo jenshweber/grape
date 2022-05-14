@@ -21,23 +21,7 @@ The easiest way to install **_GrapeVine_** is by using Docker. If you don't have
 ### Step 2: Install a Neo4J container:
 
 ```
-docker run --name neo4j \
- -p 7474:7474 \
- -p 7687:7687 \
- --net grapenet \
- -d \
- -v $HOME/neo4j/data:/data \
- -v $HOME/neo4j/logs:/logs \
- -v $HOME/neo4j/import:/var/lib/neo4j/import \
- -v $HOME/neo4j/plugins:/plugins \
- -e NEO4JLABS_PLUGINS=\[\"apoc\"\] \
- -e NEO4J_apoc_export_file_enabled=true \
- -e NEO4J_AUTH=none \
- -e NEO4J_apoc_import_file_use__neo4j__config=true \
- -e NEO4J_apoc_import_file_enabled=true \
- -e NEO4J_cypher_lenient__create__relationship=true \
- -e NEO4JLABS_PLUGINS=\[\"apoc\"\] \
- neo4j
+docker run --name neo4j -p 7474:7474 -p 7687:7687 --net grapenet -d -v $HOME/neo4j/data:/data -v $HOME/neo4j/logs:/logs -v $HOME/neo4j/import:/var/lib/neo4j/import -v $HOME/neo4j/plugins:/plugins -e NEO4JLABS_PLUGINS=\[\"apoc\"\] -e NEO4J_apoc_export_file_enabled=true -e NEO4J_AUTH=none -e NEO4J_apoc_import_file_use__neo4j__config=true -e NEO4J_apoc_import_file_enabled=true -e NEO4J_cypher_lenient__create__relationship=true -e NEO4JLABS_PLUGINS=\[\"apoc\"\] neo4j
  ```
 
 > This runs a Neo4J container (and downloads it if need be). The command also connects the container to the network we created. Note that the command switches off authentication (to the Neo4J database). This may not want to be what you want if you install this on a public system. If you do want authentication, you may need to edit the password in the _GrapeVine_ profiles.clj file.
