@@ -1,97 +1,69 @@
-[![Clojars Project](https://img.shields.io/clojars/v/leadlab/grape.svg)](https://clojars.org/leadlab/grape)
-![logo](https://raw.githubusercontent.com/jenshweber/grape/master/resources/logo.jpg)
-# Grape and GrapePress
+![logo](https://raw.githubusercontent.com/jenshweber/grape/fgrape/resources/gv-logo.png)
+# GrapeVine
 
-**_Grape_** is a **G**raph **R**ewriting and **P**ersistence **E**ngine for Clojure.  _**GrapePress**_ is a computational notebook that utilizes _Grape_.
+**_GrapeVine_** is a functional **G**raph **R**ewriting and **P**ersistence **E**ngine for Clojure.  _**GrapeVine**_ can be used with or without the integrated computational notebook (based on Gorilla REPL). 
+
+**_GrapeVine_** is a fundamentally new release of _Grape_ and _GrapePress_ with the difference that **_GrapeVine_** empraces functional graph transformations, while  _Grape_ and _GrapePress_ used stateful computation. (If you are looking for the old _Grape_ / _GrapePress_ please swith to branch "grape-legacy".)
 
 # Installation
 
 ## Quickstart - using Docker
 
-Assuming you have Docker installed:
+The easiest way to install **_GrapeVine_** is by using Docker. If you don't have Docker, please install it first.
 
-``docker run --name grapepress -p 8999:8999 -p 7474:7474 -p 7687:7687  jenshweber/grape-latest``
+ **_GrapeVine_** is based on the Neo4J graph database. We will run Neo4J in _one_ Docker container and _GrapeVine_ in a another container. The installation takes three steps:
+ 
+ ### Step 1. Create a network between the two Docker containers:    
+ ``docker network create grapenet`` 
+ 
+ > This creates a network called "grapenet". Of course, you can give it a different name. If you do, make sure to use it below, too.
 
-Then navigate to http://127.0.0.1:8999/worksheet.html?filename=welcome.clj
+### Step 2: Install a Neo4J container:
 
-Creating further notebooks works the same. If you run notebooks concurrently, you need to update the port mappings. 
-
-## Slowstart - using a local installation
-
-### Prerequisites
-
-* **Clojure** (including Leiningen, requires JDK). Eric Normand has written very nice instructions [here](https://purelyfunctional.tv/guide/how-to-install-clojure/)
-* **Neo4J** Grape requires the graph database Neo4j. (Important: Grape has not been migrated to Neo4J v. 4 yet. Please use the latest v. 3 release.) The community edition (free) can be downloaded here: https://neo4j.com/download/
-
-* add the following line to your neo4j.conf:
 ```
-cypher.lenient_create_relationship=true
+docker run --name neo4j \
+ -p 7474:7474 \
+ -p 7687:7687 \
+ --net grapenet \
+ -d \
+ -v $HOME/neo4j/data:/data \
+ -v $HOME/neo4j/logs:/logs \
+ -v $HOME/neo4j/import:/var/lib/neo4j/import \
+ -v $HOME/neo4j/plugins:/plugins \
+ -e NEO4JLABS_PLUGINS=\[\"apoc\"\] \
+ -e NEO4J_apoc_export_file_enabled=true \
+ -e NEO4J_AUTH=none \
+ -e NEO4J_apoc_import_file_use__neo4j__config=true \
+ -e NEO4J_apoc_import_file_enabled=true \
+ -e NEO4J_cypher_lenient__create__relationship=true \
+ -e NEO4JLABS_PLUGINS=\[\"apoc\"\] \
+ neo4j
+ ```
+
+> This runs a Neo4J container (and downloads it if need be). The command also connects the container to the network we created. Note that the command switches off authentication (to the Neo4J database). This may not want to be what you want if you install this on a public system. If you do want authentication, you may need to edit the password in the _GrapeVine_ profiles.clj file.
+
+After the above command, you should be able to access the Neo4J browser at http://localhost:7474/browser/
+
+### Step 3. Install a _GrapeVine_ container:
+ 
 ```
-
-* **Graphviz** Grape uses Graphviz for visualization. [installation](https://graphviz.gitlab.io/download/)
-
-### Create a Grape project
-* **Create Clojure project** For example with Leiningen ``lein new grapetest``
-* **Add profiles.clj** Create a new file ``profiles.clj`` to contain your neo4j connection info:
-
-```clojure
-{:dev {
-       :env {:db-url "http://localhost:7474/db/data/"
-             :db-usr "<your neo4j user name>"
-             :db-pw "<your neo4j password>"}}}
-```
-
-* **Edit project.clj** Add the `grape` dependency to your project.clj. Add the `lein-environ` plugin, so that Leiningen can source environment variables from your profiles.clj file. If you want to use the browser-based REPL (Gorilla) for developing your graph transformation rules (recommended) also add the `lein-gorilla` plugin. Your project.clj file will look similar to:
-
-```clojure
-(defproject grapetest "0.1.0-SNAPSHOT"
-  :description "FIXME: write description"
-  :url "http://example.com/FIXME"
-  :license {:name "EPL-2.0 OR GPL-2.0-or-later WITH Classpath-exception-2.0"
-            :url "https://www.eclipse.org/legal/epl-2.0/"}
-  :dependencies [[org.clojure/clojure "1.10.1"]
-                 [leadlab/grape "X.X.X"]]
-  :plugins [[lein-environ "1.1.0"]
-            [org.clojars.benfb/lein-gorilla "0.6.0"]]
-  :profiles {:dev {}}
-  :repl-options {:init-ns grapetest.core})
-```
-* **Start it up** Make sure the Neo4j database is running. Start a Gorilla REPL with `lein gorilla`. Open the indicated work sheet. Enter `(use 'grape.core)` to import the Grape and connect to Neo4J. (This may take a few seconds. If you are getting an exception, your database is not running or something is wrong with the connection details.)
-
-* **Load grape** enter `(use 'grape.core)` in the Web repl to load Grape
-
-* **Create a rule** Enter the following to create a rule that creates a node labeled "Hello". (You should see a visualization of the rule after you entered it.)
-
-```clojure
-(rule 'hello!
-  :create (pattern
-             (node 'n1 :label "Hello")))
+docker run -v ~/grapevine:/usr/src/app/book \
+-p 8999:8999 \
+-p 62222:62222 \
+--rm \
+--net grapenet \
+--name grapevine \
+jenshweber/grapevine
 ```
 
-* Execute the rule by calling it: `(hello!)`
-
-* Use the Neo4J browser (http://localhost:7474/browser/) to see that a node was indeed created in the graph database. (enter a simple cipher query: `match (n) return n;`
-
-* Enter another rule that matches the existing "Hello" node and links it to a newly created "Grape" node.
-
-```clojure
-(rule 'hello-grape!
-   :read (pattern
-           (node 'n1 :label "Hello"))
-   :create (pattern
-             (node 'n2 :label "Grape")
-             (edge :label "to" :src 'n1 :tar 'n2)))
-```
-
-* Execute that rule `(hello-grape!)` and check with ```(-> any? matches view)``` that the graph was indeed extended.
+> The above command starts a _GrapeVine_ constainer and mounts the `~/grapevine` directory on the host machine to the `book` directory in the _GrapeVine_ container. You can save your worksheets in that directory and exchange it with the host.
 
 # Tutorial
 
-Grape comes with an "executable" tutorial worksheet for Gorilla REPL. (Load tutorial.clj into Gorilla REPL.)
+_GrapeVine_ comes with an "executable" tutorial worksheet. After installation, nagivate to the following URL to get started http://127.0.0.1:8999/worksheet.html?filename=welcome.clj
 
 A view-only version of that worksheet is available here:
-http://viewer.gorilla-repl.org/view.html?source=github&user=jenshweber&repo=grape&path=tutorial.clj
-
+http://viewer.gorilla-repl.org/view.html?source=github&user=jenshweber&repo=grape&path=welcome.clj
 
 
 Copyright © 2016-22 Jens Weber
