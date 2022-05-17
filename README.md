@@ -34,7 +34,6 @@ After the above command, you should be able to access the Neo4J browser at http:
 docker run -v ~/grapevine:/usr/src/app/book \
 -p 8999:8999 \
 -p 62222:62222 \
---rm \
 --net grapenet \
 --name grapevine \
 jenshweber/grapevine
