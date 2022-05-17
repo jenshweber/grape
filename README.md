@@ -45,8 +45,8 @@ jenshweber/grapevine
 
 _GrapeVine_ comes with an "executable" tutorial worksheet. After installation, nagivate to the following URL to get started http://127.0.0.1:8999/worksheet.html?filename=welcome.clj
 
-A view-only version of that worksheet is available here:
-http://viewer.gorilla-repl.org/view.html?source=github&user=jenshweber&repo=grape&path=welcome.clj
+A (possibly outdated) PDF version of that worksheet is available [here](https://github.com/jenshweber/grape/blob/master/doc/tutoria-archive.pdf).
+
 
 
 Copyright © 2016-22 Jens Weber
