@@ -254,6 +254,33 @@
          "id:ID(" id "), "
          "labels:labels(" id ")} ")))
 
+(defn third [v] (nth v 2))
+
+(defn gen-constraint-new
+  [newitems olditems]
+  (if (or (< (count newitems) 1) (< (count olditems) 1))
+    '()
+    (let [ec (combo/cartesian-product (all-ids newitems) (all-ids olditems))
+          ;_ (println "\n\n **** " nc " --- " ec " \n\n ")
+          f (fn [x] (str "ID(" (first x) ")<>ID(" (second x) ")"))]
+      (map f ec))))
+
+(defn nac->cypher [nac bnodes bedges scope]
+  (if (nil? nac)
+    " "
+    (let [nnodes (filter-elem 'node (-> nac third second :els))
+          nedges (filter-elem 'edge (-> nac third second :els))
+          nnodesStr (apply str (interpose " WITH * " (map #(readnode->cypher % scope) nnodes)))
+          nedgesStr (apply str (interpose " WITH * " (map readedge->cypher nedges)))
+          cstr (apply str (interpose " AND " (concat (gen-constraint-new nnodes bnodes)
+                                                     (gen-constraint-new nedges bedges))))]
+      (str " WITH * call { with * "
+           nnodesStr " WITH * " nedgesStr 
+           (if (empty? cstr)
+             " "
+             (str " with * where  " cstr)
+             )
+           " return  count(*) as _nac } with * where _nac=0 "))))
 
 (defn search [g n pars]
   (let [r ((rules) n)
@@ -263,6 +290,10 @@
         nodesToReturnStr (apply str (interpose "," (map readnodeRet->cypher nodesToRead)))
         edgesToRead (filter-elem 'edge (-> r :read second :els))
         edgesToReadStr (apply str (interpose " WITH * " (map readedge->cypher edgesToRead)))
+        nacToCheck (nac->cypher (first (filter-elem 'NAC (-> r :read second :els)))
+                                nodesToRead 
+                                edgesToRead
+                                scope)
         itemsToDelete (:delete r)
         edgesToReturnStr (apply str (interpose "," (map readnodeRet->cypher edgesToRead)))
         qstr (str "MATCH (_g:`__Graph` {uid:\"" g "\"}) "
@@ -281,6 +312,8 @@
 
                     (gen-identification-condition itemsToDelete nodesToRead edgesToRead))
 
+                  nacToCheck
+                  
                   " RETURN _g "
                   (if (not (empty? nodesToReturnStr)) (str "," nodesToReturnStr))
                   (if (not (empty? edgesToReturnStr)) (str "," edgesToReturnStr)))]
