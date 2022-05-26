@@ -90,7 +90,7 @@ cypher.lenient_create_relationship=true
 Grape comes with an "executable" tutorial worksheet for Gorilla REPL. (Load tutorial.clj into Gorilla REPL.)
 
 A view-only version of that worksheet is available here:
-http://viewer.gorilla-repl.org/view.html?source=github&user=jenshweber&repo=grape&path=tutorial.clj
+http://viewer.gorilla-repl.org/view.html?source=gist&id=5e8e15ced9089e569a3ef271fc4b4041
 
 
 
