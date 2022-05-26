@@ -178,9 +178,9 @@
      "WHERE ID(" handle ") IN _active ")))
 
 (defn readnode->cypher2 [n]
-  (let [handle (-> n second :id)]
-    (str "create (" handle ")"
-         "<-[:read{handle:'" handle "'}]-(_gn)")))
+  (let [handle (-> n first name)]
+    (str  " create (" handle ")"
+         "<-[:read{handle:'" handle "'}]-(_gn) ")))
 
 (defn createnode->cypher [n pars]
   (let [handle (-> n second :id)
@@ -203,21 +203,25 @@
      (if (empty? (:label p)) "" (str ":" (:label p))) ")-[" (:id p) "_t:tar]->(" (:tar p) ")"
      " WHERE ID(" (:id p) ") IN _active ")))
 
-(defn createedge->cypher [e]
+(defn createedge->cypher [enodes e]
   (let [p (second e)
         handle (:id p)
         source (:src p)
         target (:tar p)]
-    (str " CREATE ( " handle " :`__Edge`:" (:label p) ") <-[:create{handle:'" handle "'}]-(_gn)"
-         " WITH * CREATE ( " target " )<-[:tar]-(" handle ") -[:src]->(" source " )"
+    (if (and (some #(= source %) enodes)
+             (some #(= target %) enodes))
+    (str
+         " CREATE ( " handle " :`__Edge`:" (:label p) ") <-[:create{handle:'" handle "'}]-(_gn)"
+         " CREATE ( " target " )<-[:tar]-(" handle ") -[:src]->(" source " )"
          " SET " handle ".src=ID(" source "), "
          handle ".tar=ID(" target "), "
          handle "._fps=" source "._fp, "
          handle "._fpt=" target "._fp, "
          handle "._fpd= apoc.coll.different([ID( " source "), ID(" target ")]) "
-         "with * SET "
+         " SET "
          handle "._fp=apoc.hashing.fingerprint("  handle
-         ", ['tar', 'src']) ")))
+         ", ['tar', 'src']) ")
+      " ")))
 
 (defn delitem->cypher [i]
   (str " create (" i ") <-[:delete]-(_gn) "))
@@ -238,7 +242,7 @@
       (reduce (partial str-sep " AND ") (concat ni ei)))))
 
 (defn- exclothers [others ditem]
-  (map #(str " ID(" ditem ")<> ID(" % ") ") others))
+  (map #(str " (ID(" ditem ")<> ID(" % ") OR " ditem " IS NULL OR " % " IS NULL)") others))
 
 (defn gen-identification-condition [itemsToDelete nodes edges]
   (if (empty? itemsToDelete)
@@ -379,18 +383,19 @@
         itemsDeleteStr (if (empty? (:delete r))
                          " "
                          (str " WITH * " (apply str (interpose " WITH * " (map delitem->cypher (:delete r))))))
-        nodesToRead (filter-elem 'node (-> r :read second :els))
-        nodesToReadStr2 (if (empty? nodesToRead)
+        nodesToReadStr2 (if (empty? nodesToRematch)
                           ""
-                          (str " WITH * " (apply str (interpose " WITH * " (map readnode->cypher2 nodesToRead)))))
+                          (str " WITH * " (apply str (interpose " WITH * " (map readnode->cypher2 nodesToRematch)))))
         nodesToCreate (filter-elem 'node (-> r :create second :els))
         nodesToCreateStr (if (empty? nodesToCreate)
                            ""
                            (str " WITH * " (apply str (interpose " WITH * " (map #(createnode->cypher % scope) nodesToCreate)))))
         edgesToCreate (filter-elem 'edge (-> r :create second :els))
+        existingNodes (concat (map #(-> % first name symbol) nodesToRematch)
+                            (map #(-> % second :id) nodesToCreate))
         edgesToCreateStr (if (empty? edgesToCreate)
                            ""
-                           (str " WITH * " (apply str (interpose " WITH * " (map createedge->cypher edgesToCreate)))))
+                           (str " WITH * " (apply str (interpose " WITH * " (map (partial createedge->cypher existingNodes) edgesToCreate)))))
         qstr (str "MATCH (_g:`__Graph` {uid:\"" g "\"}) WITH * "
                   nodesToRematchStr
                   " WITH * " edgesToRematchStr
@@ -703,13 +708,9 @@
         id (if (or (empty? s1) (= "_" s1))
              (symbol (random-id))
              (symbol s1))
-        argsmap (zipmap (take-nth 2 args)
-                        (take-nth 2 (rest args)))
-        argsmap2 (merge {:src src :tar tar} argsmap)
-        args2 (if (empty? s2)
-                argsmap2
-                (merge argsmap2 {:label s2}))]
-    (edge-os id  args2)))
+        as (or (some #(if (map? %) %) args) {})
+        op (or (some #(if (= :opt %) {:opt true}) args) {})]
+    (edge-os id  (merge {:asserts as :label s2 :src src :tar tar} op ))))
 
 (defmacro edge [h s t & args]
   (list 'edge- (list 'quote h)
@@ -1208,9 +1209,9 @@
   (-> res result->view gorillagraph/view))
 
 (query _any? []
-       (node _1 :opt true)
-       (node _2 :opt true)
-       (edge e:__Edge x y :opt true))
+       (node _1 :opt)
+       (node _2 :opt)
+       (edge e:__Edge x y :opt))
 
 
 
