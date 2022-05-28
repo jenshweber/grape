@@ -102,7 +102,7 @@
   [c]
   (str " "
        ;(get-ctr!)
-       " cond [color=lightgrey style=filled shape=none label=\"Condition: " (second c) "\"]"))
+       " cond [ fontcolor=blue shape=none label=\"" (second c) "\"]"))
 
 (defn assign->dot
   "translate an assignment to dot"
@@ -170,9 +170,10 @@
   "translate a constraint to dot"
   (let [n (name cid)
         i (:if con)
-        t (:then con)]
+        t (:then con)
+        p (:params con)]
     (str "digraph g {  splines=true overlap=false subgraph cluster0 {  "
-         "label=\"Constraint: " n "\";"
+         "label=\"Constraint: " n " " (str p) "\";"
          (pattern->dot i [] "black" "black" "")
          (pattern->dot t [] "blue" "blue" "")
          "}}")))
