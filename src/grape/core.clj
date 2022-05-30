@@ -1063,13 +1063,20 @@
                                                                   (str (name at)))))
     (list 'quote n)))
 
-
+(defmacro enforce [n cl]
+  (intern *ns* n 
+          (eval
+          (list 'fn ['g] (concat (list (first cl) 'g) (vec (rest cl))))))
+  (list 'quote n)
+  )
+  
+  
 
 (defmacro assertion [g & constrs]
 
   (list 'let ['g- (list 'enforce- g (vec constrs))]
         (list 'doseq ['i 'g-]
-              (list 'doseq ['c (list 'quote constrs)]
+              (list ['c (list 'quote constrs)] 'doseq
                     (list 'add-inv 'i 'c "inva")))
         'g-))
 
