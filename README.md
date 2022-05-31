@@ -31,7 +31,7 @@ After the above command, you should be able to access the Neo4J browser at http:
 ### Step 3. Start _GrapeVine_:
  
 ```
-grape % docker run -it --rm -v ~/grapevine:/usr/src/app/book \
+grape % docker run -it -v ~/grapevine:/usr/src/app/book \
 --net grapenet \
 --name grapevine \
 -p 8999:8999 -p 62222:62222 \
@@ -39,6 +39,10 @@ jenshweber/grapevine
 ```
 
 > The above command starts a _GrapeVine_ constainer and mounts the `~/grapevine` directory on the host machine to the `book` directory in the _GrapeVine_ container. You can save your worksheets in that directory and exchange it with the host.
+
+## Slow(er) Start - without using Docker
+
+If you don't want to use Docker, you need to install Clojure, Leiningen and Graphviz before starting _GrapeVine_ with "lein run".
 
 # Tutorial
 
