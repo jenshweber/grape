@@ -18,7 +18,7 @@ The easiest way to install **_GrapeVine_** is by using Docker. If you don't have
  
  > This creates a network called "grapenet". Of course, you can give it a different name. If you do, make sure to use it below, too.
 
-### Step 2: Install a Neo4J container:
+### Step 2: Start Neo4J:
 
 ```
 docker run --name neo4j -p 7474:7474 -p 7687:7687 --net grapenet -d -v $HOME/neo4j/data:/data -v $HOME/neo4j/logs:/logs -v $HOME/neo4j/import:/var/lib/neo4j/import -v $HOME/neo4j/plugins:/plugins -e NEO4JLABS_PLUGINS=\[\"apoc\"\] -e NEO4J_apoc_export_file_enabled=true -e NEO4J_AUTH=none -e NEO4J_apoc_import_file_use__neo4j__config=true -e NEO4J_apoc_import_file_enabled=true -e NEO4J_cypher_lenient__create__relationship=true -e NEO4JLABS_PLUGINS=\[\"apoc\"\] neo4j
@@ -28,14 +28,13 @@ docker run --name neo4j -p 7474:7474 -p 7687:7687 --net grapenet -d -v $HOME/neo
 
 After the above command, you should be able to access the Neo4J browser at http://localhost:7474/browser/
 
-### Step 3. Install a _GrapeVine_ container:
+### Step 3. Start _GrapeVine_:
  
 ```
-docker run -v ~/grapevine:/usr/src/app/book \
--p 8999:8999 \
--p 62222:62222 \
+grape % docker run -it --rm -v ~/grapevine:/usr/src/app/book \
 --net grapenet \
 --name grapevine \
+-p 8999:8999 -p 62222:62222 \
 jenshweber/grapevine
 ```
 
@@ -43,7 +42,7 @@ jenshweber/grapevine
 
 # Tutorial
 
-_GrapeVine_ comes with an "executable" tutorial worksheet. After installation, nagivate to the following URL to get started http://127.0.0.1:8999/worksheet.html?filename=welcome.clj
+_GrapeVine_ comes with an "executable" tutorial worksheet in the "help" directory. Simply load it by hitting control-g control-l.
 
 A (possibly outdated) PDF version of that worksheet is available [here](https://github.com/jenshweber/grape/blob/master/doc/tutoria-archive.pdf).
 
