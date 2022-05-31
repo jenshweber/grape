@@ -11,7 +11,6 @@
    [environ.core :refer [env]]
    [neo4j-clj.core :as db]
    [schema.core :as s]
-   [gorilla-graph.core :as gorillagraph]
    [taoensso.tufte :as tufte :refer (defnp p profiled profile)])
   (:import (java.net URI)))
 
@@ -1395,9 +1394,6 @@
     (map #(-> % distinct result->dot show) ses)))
 
 
-(defn browsequery [res]
-  (-> res result->view gorillagraph/view))
-
 (query _any? []
        (node _1 :opt)
        (node _2 :opt)
@@ -1411,8 +1407,6 @@
 (defn view [gs]
   (viewquery (_any? gs)))
 
-(defn browsegraph [g]
-  (-> (_any? g) browsequery))
 
 (defn- merge-grapes [ds d]
   (let [curg0 (-> ds first :before)
