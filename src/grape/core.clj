@@ -75,9 +75,9 @@
 (def conn
   (do
     (try
-      (-> (db/connect (URI. "bolt://neo4j:7687")
+      (-> (db/connect (URI. "bolt://localhost:7687")
                       "neo4j"
-                      "grape")
+                      "grapevine")
           db/get-session)
       (catch Exception e (println (str "Caught exception: " (.toString e))))
       (finally "UNSUCCESSFUL"))))
@@ -280,8 +280,15 @@
           nnodesStr (apply str (interpose " WITH * " (map #(readnode->cypher % scope) nnodes)))
           nedgesStr (apply str (interpose " WITH * " (map readedge->cypher nedges)))
           cstr (apply str (interpose " AND " (concat (gen-constraint-new nnodes bnodes)
-                                                     (gen-constraint-new nedges bedges))))]
-      (str " WITH * call { with * "
+      
+                                                     (gen-constraint-new nedges bedges))))
+          wstr (apply str
+                      (interpose ", "
+                                 (concat (list "_active")
+                                 (map (fn [x] (-> x second :id str))
+                                      (concat bnodes bedges)))
+                                 ))]
+      (str " WITH * call { with " wstr " "
            nnodesStr " WITH * " nedgesStr
            (if (empty? cstr)
              " "
@@ -364,8 +371,10 @@
                   (if (not (empty? edgesToReturnStr)) (str "," edgesToReturnStr)))]
     (p ::search (dbquery qstr))))
 
+(defn omit_ [s]
+  (if (str/starts-with? s "_") "" s))
 
-(defn getHandle [e]  (-> e first name))
+(defn getHandle [e]  (-> e first name omit_))
 
 (defn getId [e]  (-> e second :id))
 
@@ -789,6 +798,8 @@
           r (if (number? f) (rest xs) xs)]
       ['NAC id (apply pattern r)])))
 
+(declare dist)
+
 (defn rule-os
   "Helper function to create GT Rule"
   [n params prop]
@@ -815,7 +826,7 @@
               r2)]
        ;(validate-rule s)
       (add-rule! n s)
-      (intern *ns* (symbol (str (name n))) (fn [g & par] (exec g n par)))
+      (intern *ns* (symbol (str (name n))) (fn [g & par] (dist (exec* g n par))))
       (intern *ns* (symbol (str (name n) "*")) (fn [g & par] (exec* g n par)))
       (intern *ns* (symbol (str (name n) "-dot")) (fn [] (rule->dot n s)))
       ((intern *ns* (symbol (str (name n) "-show")) (fn [] (show (rule->dot n s))))))))
@@ -1141,8 +1152,6 @@
 (defn occ [gs]
   (map occ- gs))
 
-
-
 (defn n->dot [n color pref]
   (let [handle   (getHandle n)
         id (getId n)
@@ -1151,7 +1160,7 @@
                     (map #(str (-> % first name) ": " (-> % second pr-str))))
         attrstr (apply str (interpose " | " attrs))]
     (str "\"" pref id "\" [shape=Mrecord penwidth=bold style=filled fillcolor=aliceblue label=\"{" handle ":" label
-         "(" id ")"
+        ; "(" id ")"
          (if (not (empty? attrstr))
            (str " | " (str/escape attrstr {\" "'"}))
            "")
@@ -1397,8 +1406,7 @@
 (query _any? []
        (node _1 :opt)
        (node _2 :opt)
-       (edge e:__Edge x y :opt))
-
+       (edge e:__Edge _1 _2 :opt))
 
 
 
@@ -1428,6 +1436,7 @@
 (defn isConfluent? [g]
   (not (empty? (dbquery (str "MATCH (g:`__Graph` {uid:'" g "'})"
                              "-[:conf]->(g2)-[:prov*0..]->(g0)<-[:prov*0..]-(g) "
+                             " WHERE EXISTS ((g)-[:prov*1..]->(g2)) "
                              " return g.uid")))))
 (defn removeConfluent [gr]
   (filter #(not (isConfluent? %)) gr))

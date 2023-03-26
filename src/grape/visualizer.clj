@@ -46,7 +46,7 @@
 (defn node->dot [n c o]
   (let [p (second n)
         handle (name (:id p))
-        dhandle (if (str/starts-with? handle "_") "_" handle)
+        dhandle (if (str/starts-with? handle "_") "" handle)
         l (:label p)
         oid (:oid p)
         as (:asserts p)
@@ -135,7 +135,7 @@
   (let [m    (second p)
         els  (:els m)
         flag (if (= :iso (:sem m))
-               (str (random-id) " [color=\".7 .3 1.0\" shape=round style=filled label=\"ISO\"] " ""))]
+               (str (random-id) " [ fontcolor=blue shape=none fontsize=\"30pt\" label=<&#x21a3;>] "))]
     (if (nil? els)
       ""
       (str flag (reduce str (map (partial graphelem->dot d c1 c2 o) els))))))
@@ -149,7 +149,7 @@
         d (:delete rule)
         c (:create rule)
         p (:params rule)]
-    (str "digraph g {  splines=true overlap=false subgraph cluster0 {  "
+    (str "digraph g {  plines=true overlap=false subgraph cluster0 {  "
          "label=\"Rule: " n " " (str p) "\";"
          (pattern->dot r d "black" "red" "")
          (pattern->dot c [] "green" "green" "")
