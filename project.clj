@@ -23,7 +23,8 @@
                  [gorilla-plot "0.1.4" :exclusions [org.clojure/clojure]]
                  [grimradical/clj-semver "0.2.0" :exclusions [org.clojure/clojure]]
                  [cider/cider-nrepl "0.25.6" :exclusions [org.clojure/clojure]]
-                 [nrepl/nrepl "0.7.0"]]
+                 [nrepl/nrepl "0.7.0"]
+                 [org.clojars.jenshweber/gorilla-repl "0.7.0-SNAPSHOT"]]
   :main ^:skip-aot gorilla-repl.core
   :plugins []
   :profiles {:dev {}}

@@ -148,12 +148,20 @@
         r (:read rule)
         d (:delete rule)
         c (:create rule)
-        p (:params rule)]
+        p (:params rule)
+        g (:gcond rule)]
     (str "digraph g {  plines=true overlap=false subgraph cluster0 {  "
-         "label=\"Rule: " n " " (str p) "\";"
-         (pattern->dot r d "black" "red" "")
-         (pattern->dot c [] "green" "green" "")
-         "}}")))
+         "label=\"Rule: " n " " (str p) " \";"
+         (when (not (empty? g))
+           (str " _cond [fontsize=24 fontcolor=blue shape=none label=\""
+                (when (some #{'ID} g) " &#x27f4;")
+                (when (some #{'INJ} g) " &#x21aa;")
+                (when (some #{'DANG} g) " &#x219B;")
+                (when (some #{'GLUE} g) " &#x21C4;")
+                " \"] "))
+          (pattern->dot r d "black" "red" "")
+          (pattern->dot c [] "green" "green" "")
+        "}}")))
 
 (defn query->dot [rid query]
   "translate a query to dot"

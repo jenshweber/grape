@@ -319,13 +319,16 @@
                   nodesToReadStr
                   " WITH * " edgesToReadStr
 
-                  (if (= :iso (-> r :read second :sem))
+                  (if (some #{'INJ} (:gcond r))
                     (let [st (gen-constraint-isomorphism nodesToRead edgesToRead)]
                       (if (empty? st)
                         ""
                         (str " WITH * WHERE " st)))
 
-                    (gen-identification-condition itemsToDelete nodesToRead edgesToRead))
+                    (if (or (some #{'ID} (:gcond r)) (some #{'GLUE} (:gcond r)))
+                      (gen-identification-condition itemsToDelete nodesToRead edgesToRead)
+                      "")
+                  )
 
                   nacToCheck
 
@@ -337,6 +340,7 @@
                   (if (not (empty? nodesToReturnStr)) (str "," nodesToReturnStr))
                   (if (not (empty? edgesToReturnStr)) (str "," edgesToReturnStr)))]
     (p ::search (dbquery qstr))))
+  
 
 (defn- search-if [g n pars]
   (let [r ((constraints) n)
@@ -480,14 +484,20 @@
                   " with _gn set _gn._fp=apoc.hashing.fingerprint (_gn, ['uid']) "
                   "with _gn optional match (_gconf:`__Graph`{`_fp`:_gn.`_fp`}) "
                   " where  ID(_gn) <> ID(_gconf) and exists ((_gconf)-[:prov*0..]->()<-[:prov*0..]-(_gn) )"
-                  " create (_gn)-[:conf]->(_gconf)"
 
                   (if (empty? (:delete r)) ""
-                      (str
-                       " with * call { with _gn match(_gn)-[:delete]->(_nd:`__Node`)<-[:tar]-(_e) "
-                       " merge (_gn)-[:delete]->(_e) } "
-                       " with * call { with _gn match(_gn)-[:delete]->(_nd:`__Node`)<-[:src]-(_e) "
-                       " merge (_gn)-[:delete]->(_e) } "))
+                      (if (or (some #{'DANG} (:gcond r)) (some #{'GLUE} (:gcond r)))
+                        (str 
+                         " with * call { with _gn match(_gn)-[:delete]->(_nd:`__Node`)<-[:tar]-(_e1) RETURN collect(_e1) as _cont UNION "
+                         " match(_gn)-[:delete]->(_nd:`__Node`)<-[:src]-(_e2) RETURN collect(_e2) as _cont } "
+                         " with * call { with _gn match(_gn)-[:delete]->(_ed:`__Edge`) RETURN collect(_ed) as _deled } "
+                         " with * match(_gn) where _deled = _cont "
+                         )
+                        (str
+                         " with * call { with _gn match(_gn)-[:delete]->(_nd:`__Node`)<-[:tar]-(_e) "
+                         " merge (_gn)-[:delete]->(_e) } "
+                         " with * call { with _gn match(_gn)-[:delete]->(_nd:`__Node`)<-[:src]-(_e) "
+                         " merge (_gn)-[:delete]->(_e) } ")))
                   " RETURN _gn {.uid}")]
     (->
      (dbquery qstr)
@@ -782,6 +792,9 @@
 (defmacro delete [& xs]
   {:delete (list 'vec (list 'quote xs))})
 
+(defmacro global [& xs]
+  {:gcond (list 'vec (list 'quote xs))})
+
 (defn condition [c]
   ['cond c])
 
@@ -804,22 +817,21 @@
   "Helper function to create GT Rule"
   [n params prop]
   (let [check-syntax (partial check-syntax-generic
-                              (str "RULE          :- ( rule NAME <[PAR+]>  <:theory 'spo|'dpo> <:read PATTERN> <:delete [ID+]> <:create PATTERN>  ) \n"
+                              (str "RULE          :- ( rule NAME <[PAR+]>  <:read PATTERN> <:delete [ID+]> <:create PATTERN>  ) \n"
                                    "NAME, PAR, ID :- *symbol* \n"
                                    "PATTERN       := (pattern ...)"))]
     (check-syntax (symbol? n) "rule name must be a symbol")
     (if (not (empty? params))
       (check-syntax (valid-schema [s/Symbol] params) "rule parameter list must be sequence of symbols"))
-    (check-syntax (subset? (set (keys prop)) #{:read :delete :create :theory}) "unknown part of rule. Rules can only have :theory :read, :delete and :create parts")
+    (check-syntax (subset? (set (keys prop)) #{:read :delete :create :gcond}) "unknown part of rule. Rules can only have :theory :read, :delete and :create parts")
     (if (contains? prop :read) (check-syntax (= 'pattern (first (:read prop))) "'read' part of rule must contain a pattern"))
     (if (contains? prop :create) (check-syntax (= 'pattern (first (:create prop))) "'create' part of rule must contain a pattern"))
     (if (contains? prop :delete) (check-syntax (valid-schema [s/Symbol] (:delete prop)) "'delete' part must specify sequence of symbols"))
     (if (contains? prop :delete) (check-syntax (contains? prop :read) "'delete' part requires 'read' part to be present"))
-    (if (contains? prop :theory) (check-syntax (valid-schema s/Symbol (:theory prop)) "theory must be a symbol"))
-
+  
     (let [r (assoc prop :params params)
-          r2 (if (not (contains? prop :theory))
-               (assoc r :theory 'spo)
+          r2 (if (not (contains? prop :gcond))
+               (assoc r :gcond [])
                r)
           s (if (not (contains? prop :delete))
               (assoc r :delete [])
