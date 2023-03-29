@@ -484,15 +484,15 @@
                   " with _gn set _gn._fp=apoc.hashing.fingerprint (_gn, ['uid']) "
                   "with _gn optional match (_gconf:`__Graph`{`_fp`:_gn.`_fp`}) "
                   " where  ID(_gn) <> ID(_gconf) and exists ((_gconf)-[:prov*0..]->()<-[:prov*0..]-(_gn) )"
-
+                  " create (_gn)-[:conf]->(_gconf)"
+                  
                   (if (empty? (:delete r)) ""
                       (if (or (some #{'DANG} (:gcond r)) (some #{'GLUE} (:gcond r)))
-                        (str 
+                        (str
                          " with * call { with _gn match(_gn)-[:delete]->(_nd:`__Node`)<-[:tar]-(_e1) RETURN collect(_e1) as _cont UNION "
                          " match(_gn)-[:delete]->(_nd:`__Node`)<-[:src]-(_e2) RETURN collect(_e2) as _cont } "
                          " with * call { with _gn match(_gn)-[:delete]->(_ed:`__Edge`) RETURN collect(_ed) as _deled } "
-                         " with * match(_gn) where _deled = _cont "
-                         )
+                         " with * match(_gn) where _deled = _cont ")
                         (str
                          " with * call { with _gn match(_gn)-[:delete]->(_nd:`__Node`)<-[:tar]-(_e) "
                          " merge (_gn)-[:delete]->(_e) } "
