@@ -11,7 +11,7 @@
 ;;; 
 ;;; This tutorial uses the [computational notebook](https://en.wikipedia.org/wiki/Notebook_interface) (@@GrapePress@@) to introduce the @@GrapeVine@@ language and system. Readers who are not interested in using a computational notebook as their programming environment can still use this tutorial to learn about the @@GrapeVine@@ language. They are then referred to the github Wiki for help on setting up @@GrapeVine@@ with their faviourite IDE (such as VisualStudio Code).
 ;;; 
-;;; ### The @@GrapePress@@ Notebook interface
+;;; ### The GrapePress Notebook interface
 ;;; 
 ;;; @@GrapePress@@ notebooks consist of _worksheets_ (you are looking at one right now). Each worksheet consists of _static_ and _executable_ _segments_. 
 ;;; 
