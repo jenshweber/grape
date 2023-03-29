@@ -54,7 +54,7 @@
 ;; **
 
 ;; **
-;;; ### Using @@GrapeVine@@ - Resources and namespaces
+;;; ### Using GrapeVine - Resources and namespaces
 ;;; 
 ;;; To make @@GrapeVine@@ available, *its library must be imported*. Under the hood, @@GrapeVine@@ connects to the graph database NEO4J. The simplest way to do the import is by using a  `(use 'grape.core')` form, but it's best practice to define a separate namespace for each worksheet. Below creates a worksheet of name `tutorial`.
 ;;; 
