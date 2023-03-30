@@ -883,7 +883,7 @@
 ;;; # History and Traces
 ;;; As explained above, rules are applied to graphs (in @@grapes@@) and are used to _derive_ new graphs. This history of __derivations__ of graphs can themselves be represented as a graph, where the nodes represent graphs and edges represent _occurrences_ of graph transformations (i.e., rule applications).
 ;;; 
-;;; ## 5.1 History Graph
+;;; ## History Graph
 ;;; 
 ;;; We define the __history graph__ of a given graph _g_ as the graph that contains all graphs (and derivations) that _g_ depends on or that depend on _g_. 
 ;;; 
