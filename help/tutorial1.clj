@@ -808,5 +808,5 @@
 ;; <=
 
 ;; **
-;;; > _Note: Optional graph elements will always be matched if they exist. Therefore, the use of optional graph elements in nodes does not add non-determinism._
+;;; > _Note: Optional graph elements will always be matched if they exist. Therefore, the use of optional graph elements in nodes does not add non-determinism._ t
 ;; **
