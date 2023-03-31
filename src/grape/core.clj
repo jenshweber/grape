@@ -998,7 +998,7 @@
           r (if (number? f) (rest xs) xs)]
       ['NAC id (apply pattern r)])))
 
-(declare dist)
+(declare removeConfluent-loc)
 
 (defn rule-os
   "Helper function to create GT Rule"
@@ -1025,7 +1025,7 @@
               r2)]
        ;(validate-rule s)
       (add-rule! n s)
-      (intern *ns* (symbol (str (name n))) (fn [g & par] (dist (exec* g n par))))
+      (intern *ns* (symbol (str (name n))) (fn [g & par] (removeConfluent-loc (exec* g n par))))
       (intern *ns* (symbol (str (name n) "*")) (fn [g & par] (exec* g n par)))
       (intern *ns* (symbol (str (name n) "-dot")) (fn [] (rule->dot n s)))
       ((intern *ns* (symbol (str (name n) "-show")) (fn [] (show (rule->dot n s))))))))
@@ -1632,29 +1632,27 @@
 
 
 
-(defn isConfluent? [g]
+(defn removeConfluent- [g]
   (not (empty? (dbquery (str "MATCH (g:`__Graph` {uid:'" g "'})"
                              "-[:conf]->(g2)-[:prov*0..]->(g0)<-[:prov*0..]-(g) "
+                             " with * match (g) -[:create]->(n) detach delete g,n "
     ;                         " WHERE EXISTS ((g)-[:prov*1..]->(g2)) "
-                             " return g.uid")))))
+                             " return g2.uid")))))
 
-(defn isConfluent-loc? [g gr]
+(defn removeConfluent-loc- [g gr]
   (not (empty? (dbquery (str "MATCH (g:`__Graph` {uid:'" g "'})"
                              "<-[:conf]-(g2:`__Graph`) where g2.uid in [" gr "] "
-                             " return g.uid")))));
+                             " with * match (g) -[:create]->(n) detach delete g,n "
+                             " return g2.uid")))));
 
 
 (defn removeConfluent [gr]
-  (filter #(not (isConfluent? %)) gr))
+  (filter #(not (removeConfluent- %)) gr))
 
 
-(defn isConfluent-loc? [g gr]
-  (not (empty? (dbquery (str "MATCH (g:`__Graph` {uid:'" g "'})"
-                             "<-[:conf]-(g2:`__Graph`) where g2.uid in [" gr "] "
-                             " return g.uid")))))
-(defn dist [gr]
+(defn removeConfluent-loc [gr]
   (let [grs (apply str (interpose " , " (map #(str "'" % "'") gr)))]
-    (filter #(not (isConfluent-loc? % grs)) gr)))
+    (filter #(not (removeConfluent-loc- % grs)) gr)))
 
 
 (defmacro ->* [start test & ops]
