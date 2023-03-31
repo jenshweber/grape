@@ -6,26 +6,26 @@
 ;;; 
 ;;; # Programming Environment
 ;;; 
-;;; @@GrapeVine@@ is a tool for programming with graph transformations. @@GrapeVine@@ can be used "under the hood" as a library in software projects, but it also comes with a computational notebook environment (called [@@GrapePress@@](https://rdcu.be/c8whE)), which leverages [Gorilla](http://gorilla-repl.org).
+;;; _GrapeVine_ is a tool for programming with graph transformations. _GrapeVine_ can be used "under the hood" as a library in software projects, but it also comes with a computational notebook environment (called [_GrapePress_](https://rdcu.be/c8whE)), which leverages [Gorilla](http://gorilla-repl.org).
 ;;; 
-;;; This tutorial uses the [computational notebook](https://en.wikipedia.org/wiki/Notebook_interface) (@@GrapePress@@) to introduce the @@GrapeVine@@ language and system. Readers who are not interested in using a computational notebook as their programming environment can still use this tutorial to learn about the @@GrapeVine@@ language. They are then referred to the github Wiki for help on setting up @@GrapeVine@@ with their faviourite IDE (such as VisualStudio Code).
+;;; This tutorial uses the [computational notebook](https://en.wikipedia.org/wiki/Notebook_interface) (_GrapePress_) to introduce the _GrapeVine_ language and system. Readers who are not interested in using a computational notebook as their programming environment can still use this tutorial to learn about the _GrapeVine_ language. They are then referred to the github Wiki for help on setting up _GrapeVine_ with their faviourite IDE (such as VisualStudio Code).
 ;;; 
 ;;; ## The GrapePress Notebook interface
-;;; Here we just provide a short introduction to @@GrapeVine@@'s notebook UI (@@GrapePress@@). A more detailed and complete user manual is forthcoming as a separate document. 
+;;; Here we just provide a short introduction to _GrapeVine_'s notebook UI (_GrapePress_). A more detailed and complete user manual is forthcoming as a separate document. 
 ;;; 
-;;; @@GrapePress@@ notebooks consist of _worksheets_ (you are looking at one right now). Each worksheet consists of _static_ and _executable_ _segments_. 
+;;; _GrapePress_ notebooks consist of _worksheets_ (you are looking at one right now). Each worksheet consists of _static_ and _executable_ _segments_. 
 ;;; 
 ;;; ## Static segments
-;;; Static segments can contain text using markdown, html, @@\LaTeX@@, images and fancy things like Mermaid diagrams that can be edited online. See below for an example ER-diagram that shows the @@GrapeVine@@ meta model (which you don't need to understand right now). If you want to edit the diagram, right-click opens in a new window with Mermaid live).
+;;; Static segments can contain text using markdown, html, @@\LaTeX@@, images and fancy things like Mermaid diagrams that can be edited online. See below for an example ER-diagram that shows the _GrapeVine_ meta model (which you don't need to understand right now). If you want to edit the diagram, right-click opens in a new window with Mermaid live).
 ;;; 
 ;;; [![Mermaid Diagrams](https://mermaid.ink/img/pako:eNqNk91qwzAMhV9F-Lp5Ad8NWkYZjEHZnWGosZqaOXbm2IXS5N2n5adJWrbOFyFCn4-OLPsicq9JSEFhbbAIWCqnHPB6Dlgd4dIHP-v9fbsGo-HtBZT4pPMKnI_gkrVKTFQdg3EF5BELxpIzX4nGfDthnfrGUkkuzosYDv9bw-Ke7FV5Sj9Fzu9TpLnwrt_DmldbUFEY2hyczItoX6JxcELLDdwX2boTBoNL94MxhyVxC7dNL0527L1pssxfZp4lHLFeDqH1WdY0QyChCnQyPt1Ag9BCXEIeCCPdit1zjOnHlCZLo1r_feXbA83M3wSb-gN7aKOLv6G5Vt9Gt0VCHfJfcxHD_TFxepqMBHIHH3J6QGFdU4jKiZUoKfDYNT-IbqxKxCNbVULyr6YDJttdkpbRVGk-2o020QchD2hrWglM0e_OLhcyhkQjNDytgWq_AQvRGAo)](https://mermaid.live/edit#pako:eNqNk91qwzAMhV9F-Lp5Ad8NWkYZjEHZnWGosZqaOXbm2IXS5N2n5adJWrbOFyFCn4-OLPsicq9JSEFhbbAIWCqnHPB6Dlgd4dIHP-v9fbsGo-HtBZT4pPMKnI_gkrVKTFQdg3EF5BELxpIzX4nGfDthnfrGUkkuzosYDv9bw-Ke7FV5Sj9Fzu9TpLnwrt_DmldbUFEY2hyczItoX6JxcELLDdwX2boTBoNL94MxhyVxC7dNL0527L1pssxfZp4lHLFeDqH1WdY0QyChCnQyPt1Ag9BCXEIeCCPdit1zjOnHlCZLo1r_feXbA83M3wSb-gN7aKOLv6G5Vt9Gt0VCHfJfcxHD_TFxepqMBHIHH3J6QGFdU4jKiZUoKfDYNT-IbqxKxCNbVULyr6YDJttdkpbRVGk-2o020QchD2hrWglM0e_OLhcyhkQjNDytgWq_AQvRGAo)
 ;;; 
-;;; > Fig. 1. @@GrapeVine@@ Meta Model in Entity-Relationship Notation
+;;; > Fig. 1. _GrapeVine_ Meta Model in Entity-Relationship Notation
 ;;; 
 ;;; 
 ;;; ## Executable segments
 ;;; 
-;;; Executable code is written in [Clojure](https://clojure.org). (@@GrapeVine@@ code is a domain specific language extension of Clojure).
+;;; Executable code is written in [Clojure](https://clojure.org). (_GrapeVine_ code is a domain specific language extension of Clojure).
 ;;; 
 ;;; Executable segments are not automatically invoked when a worksheet is loaded.
 ;;; 
@@ -60,9 +60,9 @@
 ;; **
 ;;; ## Namespaces and imports
 ;;; 
-;;; To make @@GrapeVine@@ available, *its library must be imported*. Under the hood, @@GrapeVine@@ connects to the graph database NEO4J. The simplest way to do the import is by using a  `(use 'grape.core')` form, but it's best practice to define a separate namespace for each worksheet. Below creates a worksheet of name `tutorial`.
+;;; To make _GrapeVine_ available, *its library must be imported*. Under the hood, _GrapeVine_ connects to the graph database NEO4J. The simplest way to do the import is by using a  `(use 'grape.core')` form, but it's best practice to define a separate namespace for each worksheet. Below creates a worksheet of name `tutorial`.
 ;;; 
-;;; (**Remember: The statement below must be executed before any @@GrapeVine@@-related commands.** 
+;;; (**Remember: The statement below must be executed before any _GrapeVine_-related commands.** 
 ;;; (Shift-enter) Establishing the session may take a few seconds. Wait until the green light is gone.)
 ;;; 
 ;;; Extend the statement below to import from other worksheets, if your project uses multiple worksheets.
@@ -83,9 +83,9 @@
 ;; **
 ;;; # Graphs
 ;;; 
-;;; The fundamental data structure in @@GrapeVine@@ is that of a graph. More precisely, the tool supports _directed, attributed, node- and edge-labeled (danel)_ graphs. (cf. left side of Fig. 1)
+;;; The fundamental data structure in _GrapeVine_ is that of a graph. More precisely, the tool supports _directed, attributed, node- and edge-labeled (danel)_ graphs. (cf. left side of Fig. 1)
 ;;; 
-;;; @@GrapeVine@@ uses a database to store graphs. Graphs, once defined are persisted. Arbitrarily many graphs can be created. Morevover, graphs are maintained in a [fully persistent data structures](https://en.wikipedia.org/wiki/Persistent_data_structure), i.e., _all_ versions of a graph can be accessed and modified. (This is indicated in the right-side of the meta-model in Fig. 1, which shows that the internal data structure stores a version history of graphs.)
+;;; _GrapeVine_ uses a database to store graphs. Graphs, once defined are persisted. Arbitrarily many graphs can be created. Morevover, graphs are maintained in a [fully persistent data structures](https://en.wikipedia.org/wiki/Persistent_data_structure), i.e., _all_ versions of a graph can be accessed and modified. (This is indicated in the right-side of the meta-model in Fig. 1, which shows that the internal data structure stores a version history of graphs.)
 ;;; 
 ;;; A new (empty) graph is created using the `(newgrape)` function:
 ;; **
@@ -122,11 +122,11 @@
 ;; <=
 
 ;; **
-;;; Unsurprisingly, the graph is empty. Perhaps suprisingly, it will always remain so. **Graphs are immutable** in @@GrapeVine@@. This is one aspect that sets @@GrapeVine@@ apart from other graph transformation tools. It follows a functional programming approach. Data structures, once defined, are immutable.
+;;; Unsurprisingly, the graph is empty. Perhaps suprisingly, it will always remain so. **Graphs are immutable** in _GrapeVine_. This is one aspect that sets _GrapeVine_ apart from other graph transformation tools. It follows a functional programming approach. Data structures, once defined, are immutable.
 ;;; 
-;;; If you are perceptive (and have some knowlege of Clojure data types), you may have noted that the above call to `newgrape` returned a list (with a single element) rather than a simple string (as indicated by the brackets `()`). Such a list is called a **graph e**numeration or @@grape@@ for short. 
+;;; If you are perceptive (and have some knowlege of Clojure data types), you may have noted that the above call to `newgrape` returned a list (with a single element) rather than a simple string (as indicated by the brackets `()`). Such a list is called a **graph e**numeration or _grape_ for short. 
 ;;; 
-;;; In @@GrapeVine@@, all operations that produce graphs actually return _grapes_. We will later see why this data structure makes sense. For now and if the context is clear, we may continue to refer to @@grapes@@ with a single element as "graphs".
+;;; In _GrapeVine_, all operations that produce graphs actually return _grapes_. We will later see why this data structure makes sense. For now and if the context is clear, we may continue to refer to _grapes_ with a single element as "graphs".
 ;; **
 
 ;; **
@@ -140,11 +140,11 @@
 ;;; 
 ;;; The graph elements that appear on both sides (L and R) are preserved; they are referred to as the rule's _interface_.
 ;;; 
-;;; Modern graph transformation tools use a more compact notation for representing rules, by "_collapsing_" LHS and RHS into a single graph and, therefore, avoiding the need to repeat the _interface_ on both sides of the rule. @@GrapeVine@@ uses this approach. 
+;;; Modern graph transformation tools use a more compact notation for representing rules, by "_collapsing_" LHS and RHS into a single graph and, therefore, avoiding the need to repeat the _interface_ on both sides of the rule. _GrapeVine_ uses this approach. 
 ;;; 
 ;;; Many graph transformation tools have diagramming editors to write rules. While this may be convenient, these editors come with a steep learning curve and don't integrate well with common programming languages and tools (which are text-based). 
 ;;; 
-;;; @@GrapeVine@@ uses a light-weight, _hybrid_ approach with a textual input language and a graphical view. 
+;;; _GrapeVine_ uses a light-weight, _hybrid_ approach with a textual input language and a graphical view. 
 ;;; 
 ;;; This is illustrated with three example rules below. 
 ;;; 
@@ -218,7 +218,7 @@
 ;; <=
 
 ;; **
-;;; For convenience, @@GrapeVine@@ also provides a shortcut symbol **`_`** (underscore), to refer to the "last created graph" (resp. "last created @@grape@@"). So the following also works:
+;;; For convenience, _GrapeVine_ also provides a shortcut symbol **`_`** (underscore), to refer to the "last created graph" (resp. "last created _grape_"). So the following also works:
 ;; **
 
 ;; @@
@@ -230,7 +230,7 @@
 ;; <=
 
 ;; **
-;;; > _Note: The shortcut (underscore) is like a global variable that is updated as a **side effect** when a new graph is produced. It should be clear that this breaks the functional computation paradigm otherwise used in @@GrapeVine@@. From a practical perspective this may mean that dynamic segments in a @@GrapeVine@@ worksheet are no longer idempotent, but need to be executed in the right order to achieve a repeatable result._
+;;; > _Note: The shortcut (underscore) is like a global variable that is updated as a **side effect** when a new graph is produced. It should be clear that this breaks the functional computation paradigm otherwise used in _GrapeVine_. From a practical perspective this may mean that dynamic segments in a _GrapeVine_ worksheet are no longer idempotent, but need to be executed in the right order to achieve a repeatable result._
 ;;; 
 ;;; Now let's see the result of an unsuccessful rule application. Clearly, rule `world` requires the presence of a `Hello` node. So the following should not work:
 ;; **
@@ -409,7 +409,7 @@
 ;; <=
 
 ;; **
-;;; By default, @@GrapeVine@@ rules do not enforce the _identification condition_ and any conflicts are resolved in favour of deletion. This is demonstrated below. The application of `delhello` to `g2` is indeed possible and deletes the matched node:
+;;; By default, _GrapeVine_ rules do not enforce the _identification condition_ and any conflicts are resolved in favour of deletion. This is demonstrated below. The application of `delhello` to `g2` is indeed possible and deletes the matched node:
 ;; **
 
 ;; @@
@@ -479,7 +479,7 @@
 ;;; 
 ;;; The second option is called the _dangling (application) condition_.
 ;;; 
-;;; By default, @@GrapeVine@@ rules do not enforce the _dangling condition_. In other words, deletes in unkown contexts are allowed and any dangling edges are automatically deleted as well. (as demonstrated below)
+;;; By default, _GrapeVine_ rules do not enforce the _dangling condition_. In other words, deletes in unkown contexts are allowed and any dangling edges are automatically deleted as well. (as demonstrated below)
 ;; **
 
 ;; @@
@@ -653,11 +653,11 @@
 ;;; 
 ;;; # Starred rule applications
 ;;; 
-;;; In addition to the default rule applications, which computes results that are unique up to isomorphism,  @@GrapeVine@@ provides __starred rule applications__. 
+;;; In addition to the default rule applications, which computes results that are unique up to isomorphism,  _GrapeVine_ provides __starred rule applications__. 
 ;;; 
-;;; A starred rule application applies a rule so that _all_ possible matches are performed, even if the computed graphs are indistinguishable. This generates a _set_ of graphs, where each graph represents the result of a possible rule application. The output is a @@grape@@, which contains more than a single graph. (See Section 2.1)
+;;; A starred rule application applies a rule so that _all_ possible matches are performed, even if the computed graphs are indistinguishable. This generates a _set_ of graphs, where each graph represents the result of a possible rule application. The output is a _grape_, which contains more than a single graph. (See Section 2.1)
 ;;; 
-;;; > _Note: this is the point in the tutorial when we start talking about "@@grapes@@" (**grap**h **e**numerations) rather than graphs when referring to the input or output of operations._
+;;; > _Note: this is the point in the tutorial when we start talking about "_grapes_" (**grap**h **e**numerations) rather than graphs when referring to the input or output of operations._
 ;;; 
 ;;; Invoking a starred rule is simply done by adding an asterisk after the rules name:
 ;; **
@@ -693,7 +693,7 @@
 ;; <=
 
 ;; **
-;;; We can see, though, that the above @@grape@@ contains two pairs if structurally identical graphs. Using the default (non-starred) rule applications suppresses those duplicates:
+;;; We can see, though, that the above _grape_ contains two pairs if structurally identical graphs. Using the default (non-starred) rule applications suppresses those duplicates:
 ;; **
 
 ;; @@
@@ -704,13 +704,13 @@
 ;; <=
 
 ;; **
-;;; > _Note: Since graph isomorphism checking is expensive, the current implementation @@GrapeVine's@@ identity checker is based hashing. This means that there is a (very low) probability that graphs are excluded even if they are not identical. A future version of @@GrapeVine@@ may do further isomorphism tests, similar to what has been implemented in [GROOVE](https://www.google.com/url?sa=t&rct=j&q=&esrc=s&source=web&cd=&ved=2ahUKEwjOxt3A_cv3AhVrGDQIHbvRDYIQFnoECCAQAQ&url=https%3A%2F%2Fjournal.ub.tu-berlin.de%2Feceasst%2Farticle%2Fdownload%2F77%2F84&usg=AOvVaw3QwJkVQFzJbEG_THffmCqm)._ 
+;;; > _Note: Since graph isomorphism checking is expensive, the current implementation _GrapeVine's_ identity checker is based hashing. This means that there is a (very low) probability that graphs are excluded even if they are not identical. A future version of _GrapeVine_ may do further isomorphism tests, similar to what has been implemented in [GROOVE](https://www.google.com/url?sa=t&rct=j&q=&esrc=s&source=web&cd=&ved=2ahUKEwjOxt3A_cv3AhVrGDQIHbvRDYIQFnoECCAQAQ&url=https%3A%2F%2Fjournal.ub.tu-berlin.de%2Feceasst%2Farticle%2Fdownload%2F77%2F84&usg=AOvVaw3QwJkVQFzJbEG_THffmCqm)._ 
 ;; **
 
 ;; **
 ;;; ## Applying rules to _grapes_ (containing multiple graphs)
 ;;; 
-;;; So far, we only applied rules to single graphs, i.e., @@grapes@@ with a single element. However, rules can also be applied to @@grapes@@ that enumerate multiple graphs. Consider the @@grape@@ produced by the following statement. (We create a graph with two `Hello` nodes and then apply rule `world` with a "starred" rule application.) The @@grape@@ should have two graphs: 
+;;; So far, we only applied rules to single graphs, i.e., _grapes_ with a single element. However, rules can also be applied to _grapes_ that enumerate multiple graphs. Consider the _grape_ produced by the following statement. (We create a graph with two `Hello` nodes and then apply rule `world` with a "starred" rule application.) The _grape_ should have two graphs: 
 ;; **
 
 ;; @@
@@ -721,7 +721,7 @@
 ;; <=
 
 ;; **
-;;; Applying rule `vine` in the "starred" form to the above @@grape@@ will apply the rule to _each_ graph in the @@grape@@ and produce a new @@grape@@ that enumerates all resulting graphs.
+;;; Applying rule `vine` in the "starred" form to the above _grape_ will apply the rule to _each_ graph in the _grape_ and produce a new _grape_ that enumerates all resulting graphs.
 ;; **
 
 ;; @@
@@ -818,7 +818,7 @@
 ;;; 
 ;;; By convention and to distinguish queries from rules and constraints, names of queries should be appended with a question mark (**?**).
 ;;; 
-;;; Like rules and constraints, queries can be applied to @@grapes@@, but they return a relation for each graph in the @@grape@@.
+;;; Like rules and constraints, queries can be applied to _grapes_, but they return a relation for each graph in the _grape_.
 ;;; 
 ;;; Consider the following query as an example:
 ;; **
@@ -865,7 +865,7 @@
 ;; <=
 
 ;; **
-;;; @@GrapVine@@ comes with a built-in query `_any?` which matches any element in a graph (returning all elements as a result).
+;;; _GrapVine_ comes with a built-in query `_any?` which matches any element in a graph (returning all elements as a result).
 ;; **
 
 ;; @@
@@ -881,15 +881,15 @@
 
 ;; **
 ;;; # History and Traces
-;;; As explained above, rules are applied to graphs (in @@grapes@@) and are used to _derive_ new graphs. This history of __derivations__ of graphs can themselves be represented as a graph, where the nodes represent graphs and edges represent _occurrences_ of graph transformations (i.e., rule applications).
+;;; As explained above, rules are applied to graphs (in _grapes_) and are used to _derive_ new graphs. This history of __derivations__ of graphs can themselves be represented as a graph, where the nodes represent graphs and edges represent _occurrences_ of graph transformations (i.e., rule applications).
 ;;; 
 ;;; ## History Graph
 ;;; 
 ;;; We define the __history graph__ of a given graph _g_ as the graph that contains all graphs (and derivations) that _g_ depends on or that depend on _g_. 
 ;;; 
-;;; The above definition can easily be extended to @@grapes@@: Since computations with @@grapes@@ always start with a @@grape@@ that contains a single graph only, the history graph of a @@grape@@ is defined as the history graph of the unique original start graph that all graphs in the @@grape@@ depend on.
+;;; The above definition can easily be extended to _grapes_: Since computations with _grapes_ always start with a _grape_ that contains a single graph only, the history graph of a _grape_ is defined as the history graph of the unique original start graph that all graphs in the _grape_ depend on.
 ;;; 
-;;; We can generate the _history graph_ of a @@grape@@ using the `history` function:
+;;; We can generate the _history graph_ of a _grape_ using the `history` function:
 ;; **
 
 ;; @@
@@ -918,7 +918,7 @@
 ;;; > 1. Step 3: world* (two concurrent derivations)
 ;;; > 1. Step 4: vine (two concurrent derivations)
 ;;; 
-;;; Each of these steps can be represented by a @@grape@@. We can use the form `steps` to attain this sequence of @@grapes@@ that characterize a history graph: 
+;;; Each of these steps can be represented by a _grape_. We can use the form `steps` to attain this sequence of _grapes_ that characterize a history graph: 
 ;; **
 
 ;; @@
@@ -942,11 +942,11 @@
 ;; **
 ;;; ## Traces
 ;;; 
-;;; In many cases, we are not interested in the entire history graph of a @@grape@@. Rather, we may just be interested the derivation steps that led to a particular graph. We call the (linear) sequence of derivation steps that let to a particular graph the __trace__ of that graph.
+;;; In many cases, we are not interested in the entire history graph of a _grape_. Rather, we may just be interested the derivation steps that led to a particular graph. We call the (linear) sequence of derivation steps that let to a particular graph the __trace__ of that graph.
 ;;; 
 ;;; Anologously to history graphs, traces can be represented in graph form (showing linear chains of derivations).
 ;;; 
-;;; The `traces` form computes a graph trace for all graphs in a given @@grape@@:
+;;; The `traces` form computes a graph trace for all graphs in a given _grape_:
 ;; **
 
 ;; @@
