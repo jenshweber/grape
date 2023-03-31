@@ -862,6 +862,7 @@
          ferry_one_over*
          (can-eat!- "Wolf" "Goat")
          (can-eat!- "Goat" "Grape")))
+
 ;; @@
 ;; =>
 ;;; {"type":"list-like","open":"<span class='clj-lazy-seq'>(</span>","close":"<span class='clj-lazy-seq'>)</span>","separator":" ","items":[],"value":"()"}
