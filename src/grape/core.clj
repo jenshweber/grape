@@ -14,10 +14,12 @@
    [clojure.data.codec.base64 :as b64]
    [clojure.java.io :as io]
    [gorilla-repl.image :as image]
+   [gorilla-repl.html :as html]
    [taoensso.tufte :as tufte :refer (defnp p profiled profile)])
   (:import (java.net URI)))
 
 (use 'clojure.walk)
+
 
 ; ---------------------------------------------------
 ; GraphViz Visualization
@@ -40,12 +42,20 @@
 (defn dot->image [g]
   (String. (b64/encode (dorothy/render g {:format :png}))))
 
-(defn show [g]
-  (image/image-view
-   (ImageIO/read
-    (io/input-stream
-;  (dorothy/save! (dorothy/render  g {:format :png}) "out.png")
-     (dorothy/render  g {:format :png})))))
+;; (defn show [g]
+;;   (image/image-view
+;;    (ImageIO/read
+;;     (io/input-stream
+;; ;  (dorothy/save! (dorothy/render  g {:format :png}) "out.png")
+;;      (dorothy/render  g {:format :png})))))
+
+ (defn show [g]
+      (html/html-view 
+ ;      (str "<img style=\"width:100%\">"                  
+       (dorothy/render  g {:format :svg})
+   ;         "</img>")
+   ))
+
 
 
 (defn asserts->dot [as]
@@ -117,7 +127,7 @@
   [c]
   (str " "
        ;(get-ctr!)
-       " cond [ fontcolor=blue shape=none label=\"" (second c) "\"]"))
+       " cond [ shape=oval penwidth=0 style=filled fillcolor=khaki1 label=\"" (second c) "\"]"))
 
 (defn assign->dot
   "translate an assignment to dot"
@@ -165,17 +175,14 @@
         c (:create rule)
         p (:params rule)
         g (:gcond rule)]
-    (str "digraph g {  plines=true overlap=false subgraph cluster0 {  "
+    (str "digraph g { plines=true overlap=false subgraph cluster0 {  "
          "label=\"Rule: " n " " (str p) " \";"
          (when (not (empty? g))
-           (str " _cond [fontsize=24 fontcolor=blue shape=none label=\""
-                (when (some #{'ID} g) " &#x27f4;")
-                (when (some #{'INJ} g) " &#x21aa;")
-                (when (some #{'DANG} g) " &#x219B;")
-                (when (some #{'GLUE} g) " &#x21C4;")
+           (str " _cond [shape=egg style=filled penwidth=0 fontcolor=black fillcolor=khaki1 label=\""
+                (apply str (interpose "," (map name g)))
                 " \"] "))
          (pattern->dot r d "black" "red" "")
-         (pattern->dot c [] "green" "green" "")
+         (pattern->dot c [] "x11green" "x11green" "")
          "}}")))
 
 (defn query->dot [rid query]
@@ -197,7 +204,7 @@
         p (:params con)]
     (str "digraph g {  splines=true overlap=false subgraph cluster0 {  "
          "label=\"Constraint: " n " " (str p) "\";"
-         " _cond [fontsize=24 fontcolor=blue shape=none label=\"&#x21aa;\"] "
+   ;      " _cond [fontsize=24 fontcolor=blue shape=none label=\"&#x21aa;\"] "
          (pattern->dot i [] "black" "black" "")
          (pattern->dot t [] "blue" "blue" "")
          "}}")))
@@ -293,7 +300,7 @@
         handle (name (:id p))
         dhandle (if (str/starts-with? handle "_") "_" handle)
         l (:label p)
-        bgcolour (if c  "PaleGreen"
+        bgcolour (if c  "x11green"
                      (if (some #(= (symbol handle) %) d)
                        "Salmon"
                        "Gainsboro"))
@@ -1370,7 +1377,7 @@
   (n->dot n "red" ""))
 
 (defn na->dot [n]
-  (n->dot n "forestgreen" ""))
+  (n->dot n "x11green" ""))
 (defn nk->dot [n]
   (n->dot n "black" ""))
 
@@ -1395,7 +1402,7 @@
   (e->dot e "red" ""))
 
 (defn ea->dot [e]
-  (e->dot e "forestgreen" ""))
+  (e->dot e "x11green" ""))
 
 
 (defn viewocc-- [g]
@@ -1408,10 +1415,10 @@
          "  label = < &#8212;<b>" rn "</b>&#8594; > "
          (apply str (map #(n->dot % "black" g2) (:keepnodes o))) "\n"
          (apply str (map #(n->dot % "red" g2) (:delnodes o))) "\n"
-         (apply str (map #(n->dot % "forestgreen" g2) (:addnodes o))) "\n"
+         (apply str (map #(n->dot % "x11green" g2) (:addnodes o))) "\n"
          (apply str (map #(e->dot % "black" g2) (:keepedges o))) "\n"
          (apply str (map #(e->dot % "red" g2) (:deledges o))) "\n"
-         (apply str (map #(e->dot % "forestgreen" g2) (:addedges o))) "\n"
+         (apply str (map #(e->dot % "x11green" g2) (:addedges o))) "\n"
          " } ")))
 
 
@@ -1435,7 +1442,7 @@
         rels     (map viewoccrels- gs)]
     (-> (str "digraph G { "
              "compound=true; "
-       ;      "size=\"8,20\" "
+             "size=\"8\""
              (apply str (concat clusters rels))
              "}")
         show)))
@@ -1543,7 +1550,7 @@
         edges (filter (fn [x] (some #(= "__Edge" %) (getLabels x))) res)
         edgeStr (apply str (map ek->dot edges))
         graphs (filter (fn [x] (empty? (getLabels x))) res)]
-    (str "digraph g { splines=true overlap=false subgraph cluster0 {"
+    (str "digraph g { size=\"8\" splines=true overlap=false subgraph cluster0 {"
          "label=\"GRAPH: " (or (-> graphs first  getTag)
                                (-> graphs first second :uid)) "\"; \n"
          nodeStr

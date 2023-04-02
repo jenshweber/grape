@@ -3,7 +3,7 @@
    [clojure.string :as str]
    [clojure.set :refer :all]
    [dorothy.core :as dorothy]
-   [clojure.data.codec.base64 :as b64]
+
    [grape.util :refer :all]
    [clojure.java.io :as io]
    [gorilla-repl.image :as image]))
@@ -182,6 +182,7 @@
         p (:params con)]
     (str "digraph g {  splines=true overlap=false subgraph cluster0 {  "
          "label=\"Constraint: " n " " (str p) "\";"
+          " _cond [fontsize=24 fontcolor=blue shape=none label=\"&#x21aa;\"] "
          (pattern->dot i [] "black" "black" "")
          (pattern->dot t [] "blue" "blue" "")
          "}}")))
