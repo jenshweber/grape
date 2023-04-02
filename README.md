@@ -49,7 +49,7 @@ If you don't want to use Docker, you need to install Clojure, Leiningen and Grap
 _GrapeVine_ comes with an "executable" tutorial worksheet in the "help" directory. Simply load it by hitting control-g control-l.
 
 Here is a [read-only version of the tutorial](https://web.uvic.ca/~jens/gv/view.html?source=github&user=jenshweber&repo=grape&path=help/tutorial.clj) 
-
+and here is [part 2](https://web.uvic.ca/~jens/gv/view.html?source=github&user=jenshweber&repo=grape&path=help/tutorial2.clj) .
 
 
 Copyright © 2016-23 Jens Weber
