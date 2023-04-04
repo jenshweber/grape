@@ -1697,3 +1697,52 @@
                                                ops))
                           's)))))
 
+(defn harvest [tag]
+  (fn [gs]
+    (let [qstr (str
+                "CALL {OPTIONAL MATCH (v:__View{name:\"" tag "\"})-[]-(n) detach delete v,n} "
+                "CREATE (v:__View{name:\"" tag "\"}) "
+                " WITH v "
+                " MATCH (_g:`__Graph` {uid:\"" (first gs) "\"}) "
+                " WITH * call { with _g optional match (_g)-[:prov*0..]->()-[:create]->(oc) "
+                "               with * optional match (_g)-[:prov*0..]->()-[:delete]->(od) "
+                "               return apoc.coll.subtract(collect(ID(oc)), collect(ID(od))) as _active } "
+                " WITH * match(n:__Node) WHERE ID(n) IN _active "
+                " WITH distinct n,_active,v CALL apoc.refactor.cloneNodes([n], true, [\"_fp\"]) YIELD output "
+        ;        " WITH v, output, _active SET output.name=\"c\" "
+                " WITH v, output, _active CREATE (v)-[:c]->(output) "
+
+                " WITH * MATCH (output)-[gr]-(:__Graph) DELETE gr "
+
+                " WITH * REMOVE output:__Node "
+
+                " WITH _active,v match (v)-[:c]->(n1)<-[:src]-(e:__Edge)-[:tar]->(n2)<-[:c]-(v) WHERE ID(e) IN _active "
+                " WITH distinct e, v "
+                " CALL apoc.refactor.cloneNodes([e], true, [\"_fp\",\"_fpd\", \"_fps\", \"_fpt\", \"src\", \"tar\"]) "
+                " YIELD output "
+                " WITH output, v "
+                " set output.name=\"n\" "
+                " WITH output, v "
+                " MATCH (output)-[gr]-(:__Graph) DELETE gr "
+                " with output, v "
+                " MATCH (output)-[s1:src]->()<-[]-(:__Graph) DELETE s1 "
+                " with output, v "
+                " MATCH (output)-[t1:tar]->()<-[]-(:__Graph) DELETE t1 "
+                " with output, v "
+                " REMOVE output:__Edge "
+
+                " WITH v "
+                " MATCH (e:__Edge)-[s:src]->(vn1)<-[:c]-(v) delete s "
+                " WITH v "
+                " MATCH (e:__Edge)-[t:tar]->(vn2)<-[:c]-(v) delete t "
+                " WITH v "
+                " CALL { with v "
+                " MATCH (v)-[]->(n1)<-[s:src]-(es)-[:tar]->(n2) "
+                " delete s create (n1)-[:src]->(es)} "
+                " WITH v "
+                " MATCH (v)-[:c]->(n1)-[s:src]->(es)-[:tar]->(n2) "
+                " WITH distinct es, v "
+                " CALL apoc.refactor.collapseNode([es],head(labels(es))) "
+                " YIELD input, output, error "
+                " RETURN v")]
+      (dbquery qstr))))
