@@ -1,7 +1,7 @@
 ;; gorilla-repl.fileformat = 1
 
 ;; **
-;;; # Tutorial 
+;;; # Tutorial (Part 1)
 ;;; ![logo](https://raw.githubusercontent.com/jenshweber/grape/master/resources/gv-logo.png)
 ;;; 
 ;;; ## Programming Environment
@@ -712,7 +712,7 @@
 ;; <=
 
 ;; **
-;;; > _Note: Since graph isomorphism checking is expensive, the current implementation _GrapeVine's_ identity checker is based hashing. This means that there is a (very low) probability that graphs are excluded even if they are not identical. A future version of _GrapeVine_ may do further isomorphism tests, similar to what has been implemented in [GROOVE](https://www.google.com/url?sa=t&rct=j&q=&esrc=s&source=web&cd=&ved=2ahUKEwjOxt3A_cv3AhVrGDQIHbvRDYIQFnoECCAQAQ&url=https%3A%2F%2Fjournal.ub.tu-berlin.de%2Feceasst%2Farticle%2Fdownload%2F77%2F84&usg=AOvVaw3QwJkVQFzJbEG_THffmCqm)._ 
+;;; > Note: Since graph isomorphism checking is expensive, the current implementation _GrapeVine's_ identity checker is based on hashing. This means that there is a (low) probability that graphs are excluded even if they are not identical. A future version of _GrapeVine_ may do confirmatory isomorphism tests, similar to what has been implemented in [GROOVE](https://www.google.com/url?sa=t&rct=j&q=&esrc=s&source=web&cd=&ved=2ahUKEwjOxt3A_cv3AhVrGDQIHbvRDYIQFnoECCAQAQ&url=https%3A%2F%2Fjournal.ub.tu-berlin.de%2Feceasst%2Farticle%2Fdownload%2F77%2F84&usg=AOvVaw3QwJkVQFzJbEG_THffmCqm).
 ;; **
 
 ;; **
@@ -816,7 +816,7 @@
 ;; <=
 
 ;; **
-;;; > _Note: Optional graph elements will always be matched if they exist. Therefore, the use of optional graph elements in nodes does not add non-determinism._
+;;; > Note: Optional graph elements will always be matched if they exist. Therefore, the use of optional graph elements in nodes does not add non-determinism.
 ;; **
 
 ;; **
@@ -884,7 +884,7 @@
 ;; <=
 
 ;; **
-;;; > _Note: Indeed, the function `view(g)` is merely a shortcut for writing `(viewquery (_any? g))`. _
+;;; > Note: Indeed, the function `view(g)` is merely a shortcut for writing `(viewquery (_any? g))`. 
 ;; **
 
 ;; **
@@ -1074,7 +1074,7 @@
 ;; **
 ;;; Observe that testing a graph constraint only returns a graph _if_ it satisfies the constraint.
 ;;; 
-;;; > **_Graph constraints act as filters on grapes. They filter out all graphs that do not satisfy the constraint._**
+;;; > Graph constraints act as filters on grapes. They filter out all graphs that do not satisfy the constraint.
 ;;; 
 ;;; Let's see another example with the `rel` rule we have seen earlier (part 1). As previously noted, applying that rule to a graph with two `Hello` nodes produces two unique graphs (four if we use a starred rule application).
 ;;; 
@@ -1343,7 +1343,7 @@
 ;; <=
 
 ;; **
-;;; >_Note: Schema constraints are "inherited" during derivation. In other words, a graph that was created as a result of a rule application has the same schema as the graph it was derived from. _
+;;; > Schema constraints are "inherited" during derivation. In other words, a graph that was created as a result of a rule application has the same schema as the graph it was derived from.
 ;; **
 
 ;; **
@@ -1397,7 +1397,7 @@
 ;; <=
 
 ;; **
-;;; > __Note__: Constraints (and rules) are currently not "stored procedures" in the Neo4J database. The schema is stored in the database only with the names of the constraints. This means that you need to (re)evaluate the declaration of any constraints that are referenced in a graph's schema prior to working with the graph.
+;;; > Constraints (and rules) are currently not "stored procedures" in the Neo4J database. The schema is stored in the database only with the names of the constraints. This means that you need to (re)evaluate the declaration of any constraints that are referenced in a graph's schema prior to working with the graph.
 ;;; 
 ;;; ### Using parameterized constraints in schema definitions
 ;;; 

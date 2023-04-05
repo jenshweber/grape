@@ -1697,8 +1697,7 @@
                                                ops))
                           's)))))
 
-(defn harvest [tag]
-  (fn [gs]
+(defn harvest [gs tag]
     (let [qstr (str
                 "CALL {OPTIONAL MATCH (v:__View{name:\"" tag "\"})-[]-(n) detach delete v,n} "
                 "CREATE (v:__View{name:\"" tag "\"}) "
@@ -1721,7 +1720,7 @@
                 " CALL apoc.refactor.cloneNodes([e], true, [\"_fp\",\"_fpd\", \"_fps\", \"_fpt\", \"src\", \"tar\"]) "
                 " YIELD output "
                 " WITH output, v "
-                " set output.name=\"n\" "
+  ;              " set output.name=\"n\" "
                 " WITH output, v "
                 " MATCH (output)-[gr]-(:__Graph) DELETE gr "
                 " with output, v "
@@ -1744,5 +1743,52 @@
                 " WITH distinct es, v "
                 " CALL apoc.refactor.collapseNode([es],head(labels(es))) "
                 " YIELD input, output, error "
-                " RETURN v")]
-      (dbquery qstr))))
+                " RETURN v")
+          ret   (dbquery qstr)]
+      (if (empty? ret) nil tag)))
+
+(defn plant [tag]
+  (let [qstr (str
+              "CREATE (_gn:`__Graph`{uid: apoc.create.uuid()}) "
+              "WITH _gn "
+              "MATCH (v:`__View`{name:\"" tag "\"}) "
+              "with * OPTIONAL MATCH (v)-[:c]->(n) "
+              "CALL apoc.refactor.cloneNodes([n], true) YIELD output as nc "
+              "with * create (_gn)-[:create]->(nc) "
+              "with * match(v)-[e:c]->(nc) delete e "
+              "with * CALL { with _gn match (_gn)-[:create]->(nn) "
+              "              return collect (ID(nn)) as nids} "
+              "with nids, _gn "
+              "match (n1)-[e]->(n2) where ID(n1) IN nids and ID(n2) IN nids "
+              "CALL apoc.refactor.extractNode(e,[TYPE(e), '__Edge'],'tar','src') "
+              "YIELD output as ne "
+              "SET n1:__Node SET n2:__Node "
+              "return distinct _gn ")
+        g   (-> (dbquery qstr) first :_gn :uid)
+        qstr2 (str
+               "match (_gn:`__Graph`{uid:\"" g "\"})-[:create]->(n1:__Node)-[]-(e:__Edge) "
+               "merge ((_gn)-[:create]->(e)) "
+               "with _gn "
+               "match (_gn)-[:create]->(n1:__Node)-[e:src]->(:__Edge) "
+               "CALL apoc.refactor.invert(e) YIELD output "
+               "with _gn "
+               "match (_gn)-[:create]->(n1:__Node)-[e]-(n2) "
+               "where not exists ((_gn)-[:create]->(n2)) "
+               "delete e "
+               "with _gn "
+               "match (_gn)-[:create]->(n:__Node) "
+               "  set n._fp=apoc.hashing.fingerprint(n) "
+               "with _gn "              
+               "match (_gn)-[:create]->(ns:__Node)<-[:src]-(e:__Edge)-[:tar]->(nt) "
+               " SET e.src=ID(ns), e.tar=ID(nt), e._fps=ns._fp, e._fpt=nt._fp, "
+               " e._fpd= apoc.coll.different([ID(ns), ID(nt)]) "
+               " SET e._fp=apoc.hashing.fingerprint( e, ['tar', 'src']) "
+
+               "with _gn optional match (_gn) -[:prov*0..]->()-[:create]->(_el) "
+               " with _gn, collect (_el._fp) as _fps "
+               " with _gn, _fps "
+               " set _gn._fps = apoc.coll.sort(_fps) "
+               " with _gn set _gn._fp=apoc.hashing.fingerprint (_gn, ['uid']) "
+               )]
+    (dbquery qstr2)
+    (list g)))
