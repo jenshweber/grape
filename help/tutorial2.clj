@@ -5,7 +5,7 @@
 ;;; 
 ;;; ![logo](https://raw.githubusercontent.com/jenshweber/grape/master/resources/gv-logo.png)
 ;;; 
-;;; This is part 2 of the _GrapeVine_ tutorial. Part 1 of the tutorial is [here](worksheet.html?filename=help/tutorial.clj).
+;;; This is part 2 of the _GrapeVine_ tutorial. Part 1 of the tutorial is [here](worksheet.html?filename=help/tutorial.clj) (live version) or [here]((view.html?source=github&user=jenshweber&repo=grape&path=help/tutorial.clj) (view-only version).
 ;;; 
 ;;; 
 ;;; 

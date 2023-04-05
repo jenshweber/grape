@@ -1687,5 +1687,5 @@
 ;;; Given _GrapeVine_'s functional approach to graph computation, concurrent transactions are automatically isolated from each other. They result in separate _version branches_ of a graph's derivation history. What is missing currently is a way to merge these parallel branches back into a single graph state. This is subject to current work.
 ;;; 
 ;;; ## Tutorial Part 2
-;;; The part 2 of the tutorial can be found [here](worksheet.html?filename=help/tutorial2.clj)
+;;; The part 2 of the tutorial can be found [here](worksheet.html?filename=help/tutorial2.clj) (if you are viewing the live version of this tutorial) or [here](view.html?source=github&user=jenshweber&repo=grape&path=help/tutorial2.clj) (if you are using the view-only version).
 ;; **
