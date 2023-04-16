@@ -29,4 +29,4 @@
   :plugins []
   :profiles {:dev {}}
   :test-path "test/"
-  :jvm-opts ["-Xmx1g" "-server"])
+  :jvm-opts ["-Xmx8g" "-server"])

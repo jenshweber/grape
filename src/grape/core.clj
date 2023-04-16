@@ -490,7 +490,8 @@
            " return  count(*) as _nac } with * where _nac=0 "))))
 
 (defn search [g n pars]
-  (let [r ((rules) n)
+  (let [_ (debug println "*** SEARCH ")
+        r ((rules) n)
         scope (zipmap (:params r) pars)
         nodesToRead (filter-elem 'node (-> r :read second :els))
         nodesToReadStr (apply str (interpose " WITH * " (map #(readnode->cypher % scope) nodesToRead)))
@@ -532,12 +533,15 @@
 
                   " RETURN _g "
                   (if (not (empty? nodesToReturnStr)) (str "," nodesToReturnStr))
-                  (if (not (empty? edgesToReturnStr)) (str "," edgesToReturnStr)))]
+                  (if (not (empty? edgesToReturnStr)) (str "," edgesToReturnStr))
+               ;   " LIMIT 50"
+                  )]
     (p ::search (dbquery qstr))))
   
 
 (defn- search-if [g n pars]
-  (let [r ((constraints) n)
+  (let [
+        r ((constraints) n)
         scope (zipmap (:params r) pars)
         nodesToRead (filter-elem 'node (-> r :if second :els))
         nodesToReadStr (apply str (interpose " WITH * " (map #(readnode->cypher % scope) nodesToRead)))
@@ -574,6 +578,8 @@
 
 (defn getHandle [e]  (-> e first name omit_))
 
+(defn getHandle- [e]  (-> e first name))
+
 (defn getId [e]  (-> e second :id))
 
 (defn getSrc [e]  (-> e second :src))
@@ -592,7 +598,7 @@
 
 (defn nodeRem->cypher [n]
   (let [id   (getId n)
-        handle (getHandle n)]
+        handle (getHandle- n)]
     (str  " MATCH(" handle ") WHERE ID( " handle ")=" id)))
 
 (defn check-one-then [g n pars redex]
@@ -639,7 +645,8 @@
 
 
 (defn derive- [g n pars redex]
-  (let [r ((rules) n)
+  (let [_ (debug println "*** DERIVE ")
+        r ((rules) n)
         scope (zipmap (:params r) pars)
         nodesToRematch (filter (fn [x] (some #(= "__Node" %) (-> x second :labels))) redex)
         nodesToRematchStr (apply str (map nodeRem->cypher nodesToRematch))
@@ -699,14 +706,11 @@
      :_gn :uid
      list)))
 
-(defn- exec- [g n par]
-  (let [redexes (search g n par)]
-    (if (empty? redexes)
-      nil
-      (derive- g n par (first redexes)))))
+
 
 
 (defn- get-inv [g]
+  (debug println "*** CHECK INVARIANTS ")
   (->
    (dbquery (str "MATCH (g:`__Graph`{uid:\"" (first g) "\"})-[:prov*0..]->(gs) "
                  " with gs optional match (gs)-[:_inve]->(inve) "
@@ -736,7 +740,38 @@
                     (str "Asserted invariant '" c "' violated for graph " g)))))))
     ge))
 
-(defn exec [gs n par]
+
+(defn removeConfluent- [g]
+  (not (empty? (dbquery (str "MATCH (g:`__Graph` {uid:'" g "'})"
+                             "-[:conf]->(g2)-[:prov*0..]->(g0)<-[:prov*0..]-(g) "
+                             " with * match (g) -[:create]->(n) detach delete g,n "
+    ;                         " WHERE EXISTS ((g)-[:prov*1..]->(g2)) "
+                             " return g2.uid")))))
+
+(defn removeConfluent-loc- [g gr]
+  (not (empty? (dbquery (str "MATCH (g:`__Graph` {uid:'" g "'})"
+                             "<-[:conf]-(g2:`__Graph`) where g2.uid in [" gr "] "
+                             " with * match (g) -[:create]->(n) detach delete g,n "
+                             " return g2.uid")))));
+
+
+(defn removeConfluent [gr]
+  (filter #(not (removeConfluent- %)) gr))
+
+
+(defn removeConfluent-loc [gr]
+  (let [grs (apply str (interpose " , " (map #(str "'" % "'") gr)))]
+    (filter #(not (removeConfluent-loc- % grs)) gr)))
+
+(def dist removeConfluent-loc)
+
+(defn- exec- [g n par]
+  (let [redexes (search g n par)]
+    (let [gns (map (partial derive- g n par) redexes)
+          gn (reduce concat gns)]
+      gn)))
+
+(defn exec-all [gs n par]
   (let [res (map #(exec- % n par) gs)
         gn (reduce concat res)
         gne (check-invariants gn)]
@@ -744,15 +779,60 @@
       (set-grape! gne))
     gne))
 
+(defn exec= [gs n par]
+  (let [_ (debug println "\n\n***************************"
+                 "\n**** EXECUTING RULE: " n " - non-distinct mode (=)"
+                 "\n***************************\n")
+        gne (exec-all gs n par)]
+    gne))
+
+(defn exec [gs n par]
+  (let [_ (debug println "\n\n***************************"
+               "\n**** EXECUTING RULE: " n " - distinct mode "
+               "\n***************************\n")
+        gne (exec-all gs n par)]
+    (removeConfluent-loc gne)))
+
+(defn- combine* [gs]
+  (let [_ (debug println "**** GS is: " gs)
+        gss (str "[ "
+                 (apply str (interpose ", " (map (fn [x] (str "\"" x "\"")) gs)))
+                 "]")
+        qstr (str
+              " create (_gn:__Graph {uid: apoc.create.uuid()}) "
+              " with * "
+              " match (_g:`__Graph`)-[_p:prov]->(_gp) where _g.uid in " gss
+              " and not EXISTS {match (g1:`__Graph`)-[:read]->(e)<-[:delete]-(g2:`__Graph`) where g1.uid in " gss
+              "                 and g2.uid in " gss " and g1 <> g2 } "
+              " with * merge (_gn)-[:prov{rule:_p.rule + \"*\"}]->(_gp) "
+              " with * match (_g)-[:read]->(read) "
+              " with * match (_g)-[:delete]->(deleted) "
+              " with * match (_g)-[:create]->(created) "
+              " with * merge (_gn)-[:read]->(read) "
+              " with * merge (_gn)-[:delete]->(deleted) "
+              " with * merge (_gn)-[:create]->(created) "
+              " with * detach delete (_g) "
+              " with _gn optional match (_gn) -[:prov*0..]->()-[:create]->(_el) "
+              " with _gn, collect (_el._fp) as _fps "
+              " with _gn, _fps "
+              " set _gn._fps = apoc.coll.sort(_fps) "
+              " with _gn set _gn._fp=apoc.hashing.fingerprint (_gn, ['uid']) "
+              " return _gn ")]
+    (-> (dbquery qstr) first :_gn :uid)
+        ))
+
 (defn- exec*- [g n par]
   (let [redexes (search g n par)]
     (let [gns (map (partial derive- g n par) redexes)
-          gn (reduce concat gns)]
-      gn)))
+          gnc (combine* (map first gns))]
+      (list gnc))))
 
 
 (defn exec* [gs n par]
-  (let [res (map #(exec*- % n par) gs)
+  (let [_ (debug println "\n\n***************************"
+                         "\n**** EXECUTING RULE: " n " - parallel mode (*)"
+                         "\n***************************\n")
+        res (map #(exec*- % n par) gs)
         gn (reduce concat res)
         gne (check-invariants gn)]
     (if (not (empty? gne))
@@ -1005,7 +1085,6 @@
           r (if (number? f) (rest xs) xs)]
       ['NAC id (apply pattern r)])))
 
-(declare removeConfluent-loc)
 
 (defn rule-os
   "Helper function to create GT Rule"
@@ -1032,7 +1111,8 @@
               r2)]
        ;(validate-rule s)
       (add-rule! n s)
-      (intern *ns* (symbol (str (name n))) (fn [g & par] (removeConfluent-loc (exec* g n par))))
+      (intern *ns* (symbol (str (name n))) (fn [g & par] (exec= g n par)))
+      (intern *ns* (symbol (str (name n) "#")) (fn [g & par] (exec g n par)))
       (intern *ns* (symbol (str (name n) "*")) (fn [g & par] (exec* g n par)))
       (intern *ns* (symbol (str (name n) "-dot")) (fn [] (rule->dot n s)))
       ((intern *ns* (symbol (str (name n) "-show")) (fn [] (show (rule->dot n s))))))))
@@ -1639,30 +1719,9 @@
 
 
 
-(defn removeConfluent- [g]
-  (not (empty? (dbquery (str "MATCH (g:`__Graph` {uid:'" g "'})"
-                             "-[:conf]->(g2)-[:prov*0..]->(g0)<-[:prov*0..]-(g) "
-                             " with * match (g) -[:create]->(n) detach delete g,n "
-    ;                         " WHERE EXISTS ((g)-[:prov*1..]->(g2)) "
-                             " return g2.uid")))))
-
-(defn removeConfluent-loc- [g gr]
-  (not (empty? (dbquery (str "MATCH (g:`__Graph` {uid:'" g "'})"
-                             "<-[:conf]-(g2:`__Graph`) where g2.uid in [" gr "] "
-                             " with * match (g) -[:create]->(n) detach delete g,n "
-                             " return g2.uid")))));
 
 
-(defn removeConfluent [gr]
-  (filter #(not (removeConfluent- %)) gr))
-
-
-(defn removeConfluent-loc [gr]
-  (let [grs (apply str (interpose " , " (map #(str "'" % "'") gr)))]
-    (filter #(not (removeConfluent-loc- % grs)) gr)))
-
-
-(defmacro ->* [start test & ops]
+(defmacro ->*?# [start test & ops]
   (list 'let ['res
               (list 'loop ['g start]
                     (list 'if (list 'empty? 'g)
@@ -1676,18 +1735,35 @@
         (list 'set-grape! 'res)
         'res))
 
-(defmacro ->** [start & ops]
+; recurse as long as possible (ralap)
+(defmacro ->* [start & ops]
   (list 'let ['res
-              (list 'loop ['g start]
+              (list 'loop ['g start
+                           'gp '()]
                     (list 'if (list 'empty? 'g)
-                          'g
+                          'gp
                           (list 'recur (concat (list '-> 'g)
-                                               ops
-                                               (list 'removeConfluent)))))]
+                                               ops) 'g)))]
         (list 'set-grape! 'res)
         'res))
 
-(defmacro ->*! [start test & ops]
+
+; recurse n times
+(defmacro ->n* [start n & ops]
+    (list 'let ['res
+                (list 'loop ['g start
+                             'ctr 0]
+                      (list 'if (list 'or (list 'empty? 'g)
+                                          (list '= 'ctr n))
+                            'g
+                            (list 'recur (concat (list '-> 'g)
+                                                 ops) (list 'inc 'ctr))))]                                                  
+        (list 'set-grape! 'res)
+        'res))
+
+
+
+(defmacro ->*? [start test & ops]
   (list 'loop ['g start]
         (list 'if (list 'empty? 'g)
               'g
@@ -1792,3 +1868,6 @@
                )]
     (dbquery qstr2)
     (list g)))
+
+
+
