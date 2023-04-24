@@ -893,8 +893,12 @@
   (let [_ (debug println "\n\n***************************"
                  "\n**** EXECUTING RULE: " n " - distinct mode "
                  "\n***************************\n")
+        m (checkeq?)
+        _  (checkeq! true)
         gne (exec-all gs n par)]
-    (removeConfluent-loc gne)))
+    (checkeq! m)
+    (removeConfluent-loc gne)
+    ))
 
 (defn- combine* [gs]
   (let [
@@ -1328,7 +1332,7 @@
                   " WITH * call { with _g optional match (_g)-[:prov*0..]->()-[:create]->(o)"
 " where not exists ((o)<-[:delete]-()<-[:prov*0..]-(_g)) "
 " return collect(ID(o)) as _active } "
-                  " WHERE ID(n) in _active AND apoc.coll.intersection(labels(n), " ntsr ")=[] return n")]
+                  " WITH * match (n:__Node) WHERE ID(n) in _active AND apoc.coll.intersection(labels(n), " ntsr ")=[] return n")]
     (if (empty? (dbquery qstr))
       g
       nil)))
@@ -1339,7 +1343,7 @@
                   " WITH * call { with _g optional match (_g)-[:prov*0..]->()-[:create]->(o)"
 " where not exists ((o)<-[:delete]-()<-[:prov*0..]-(_g)) "
 " return collect(ID(o)) as _active } "
-                  " WITH * match (n:__Edge) where ID(n) in _active AND  apoc.coll.intersection(labels(e), " ntsr ")=[] return e")]
+                  " WITH * match (n:__Edge) where ID(n) in _active AND  apoc.coll.intersection(labels(n), " ntsr ")=[] return n")]
     (if (empty? (dbquery qstr))
       g
       nil)))
@@ -1838,7 +1842,9 @@
 
 
 (defmacro ->*?# [start test & ops]
-  (list 'let ['res
+  (list 'let ['m (list 'checkeq?)
+              '_ (list 'checkeq! true)
+              'res
               (list 'loop ['g start]
                     (list 'if (list 'empty? 'g)
                           'g
@@ -1848,6 +1854,7 @@
                                                            ops
                                                            (list 'removeConfluent)))
                                       's))))]
+        (list 'checkeq! 'm)
         (list 'set-grape! 'res)
         'res))
 
