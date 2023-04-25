@@ -12,8 +12,6 @@
    [schema.core :as s]
    [dorothy.core :as dorothy]
    [clojure.data.codec.base64 :as b64]
-   [clojure.java.io :as io]
-   [gorilla-repl.image :as image]
    [gorilla-repl.html :as html]
    [taoensso.tufte :as tufte :refer (defnp p profiled profile)])
   (:import (java.net URI)))
@@ -300,51 +298,6 @@
 (dbquery "create index if not exists for  (g:Graph) on g.uid")
 
 
-; -------------------------------------------------------
-; Viewer
-; -------------------------------------------------------
-
-(defn node->view [c d n]
-  (let [p (second n)
-        handle (name (:id p))
-        dhandle (if (str/starts-with? handle "_") "_" handle)
-        l (:label p)
-        bgcolour (if c  "x11green"
-                     (if (some #(= (symbol handle) %) d)
-                       "Salmon"
-                       "Gainsboro"))
-        bordercolour (if c  "#32CD32"
-                         (if (some #(= (symbol handle) %) d)
-                           "#FF2400"
-                           "black"))]
-    {:id handle
-     :label (str dhandle (if (nil? l) "" (str ":" l)))
-     :shape "box"
-     :color {:background bgcolour
-             :border bordercolour
-             :highlight {:background bgcolour
-                         :border bordercolour}}
-     :shapeProperties (if (:opt p) {:borderDashes [5 5]} {})}))
-
-
-
-(defn edge->view [c d e]
-  (let [p (second e)
-        handle (name (:id p))
-        src (name (:src p))
-        tar (name (:tar p))
-        l (:label p)
-        colour (if c  "#32CD32"
-                   (if (some #(= (symbol handle) %) d)
-                     "#FF2400"
-                     "Black"))]
-    {:from src
-     :to tar
-     :color colour
-     :label l
-     :shapeProperties (if (:opt p) {:borderDashes [5 5]} {})
-     :arrows {:to {:enabled true}}}))
-
 
 
 ; ---------------------------------------------------
@@ -499,53 +452,7 @@
              (str " with * where  " cstr))
            " return  count(*) as _nac } with * where _nac=0 "))))
 
-(comment (defn search [g n pars]
-           (let [_ (debug println "*** SEARCH ")
-                 r ((rules) n)
-                 scope (zipmap (:params r) pars)
-                 nodesToRead (filter-elem 'node (-> r :read second :els))
-                 nodesToReadStr (apply str (interpose " WITH * " (map #(readnode->cypher % scope) nodesToRead)))
-                 nodesToReturnStr (apply str (interpose "," (map readnodeRet->cypher nodesToRead)))
-                 edgesToRead (filter-elem 'edge (-> r :read second :els))
-                 edgesToReadStr (apply str (interpose " WITH * " (map readedge->cypher edgesToRead)))
-                 conditions (filter-elem 'cond (-> r :read second :els))
-                 conditionsStr (apply str (interpose " AND " (map #(conditions->cypher % scope) conditions)))
-                 nacToCheck (nac->cypher (first (filter-elem 'NAC (-> r :read second :els)))
-                                         nodesToRead
-                                         edgesToRead
-                                         scope)
-                 itemsToDelete (:delete r)
-                 edgesToReturnStr (apply str (interpose "," (map readnodeRet->cypher edgesToRead)))
-                 qstr (str "MATCH (_g:`__Graph` {uid:\"" g "\"}) "
-                           " WITH * call { with _g optional match (_g)-[:prov*0..]->()-[:create]->(oc)"
-                           " with * optional match (_g)-[:prov*0..]->()-[:delete]->(od)"
-                           " return apoc.coll.subtract(collect(ID(oc)), collect(ID(od))) as _active } "
-                           " WITH * "
-                           nodesToReadStr
-                           " WITH * " edgesToReadStr
 
-                           (if (some #{'INJ} (:gcond r))
-                             (let [st (gen-constraint-isomorphism nodesToRead edgesToRead)]
-                               (if (empty? st)
-                                 ""
-                                 (str " WITH * WHERE " st)))
-
-                             (if (or (some #{'ID} (:gcond r)) (some #{'GLUE} (:gcond r)))
-                               (gen-identification-condition itemsToDelete nodesToRead edgesToRead)
-                               ""))
-
-                           nacToCheck
-
-                           (if (empty? conditionsStr)
-                             ""
-                             (str " WITH * WHERE " conditionsStr))
-
-                           " RETURN _g "
-                           (if (not (empty? nodesToReturnStr)) (str "," nodesToReturnStr))
-                           (if (not (empty? edgesToReturnStr)) (str "," edgesToReturnStr))
-               ;   " LIMIT 50"
-                           )]
-             (p ::search (dbquery qstr)))))
 
 (defn- search-if [g n pars]
   (let [r ((constraints) n)
@@ -652,67 +559,6 @@
     (not (empty? (dbquery qstr)))))
 
 
-(comment (defn derive- [g n pars redex]
-           (let [_ (debug println "*** DERIVE ")
-                 r ((rules) n)
-                 scope (zipmap (:params r) pars)
-                 nodesToRematch (filter (fn [x] (some #(= "__Node" %) (-> x second :labels))) redex)
-                 nodesToRematchStr (apply str (map nodeRem->cypher nodesToRematch))
-                 edgesToRematch (filter (fn [x] (some #(= "__Edge" %) (-> x second :labels))) redex)
-                 edgesToRematchStr (apply str (map nodeRem->cypher edgesToRematch))
-                 itemsDeleteStr (if (empty? (:delete r))
-                                  " "
-                                  (str " WITH * " (apply str (interpose " WITH * " (map delitem->cypher (:delete r))))))
-                 nodesToReadStr2 (if (empty? nodesToRematch)
-                                   ""
-                                   (str " WITH * " (apply str (interpose " WITH * " (map readnode->cypher2 nodesToRematch)))))
-                 nodesToCreate (filter-elem 'node (-> r :create second :els))
-                 nodesToCreateStr (if (empty? nodesToCreate)
-                                    ""
-                                    (str " WITH * " (apply str (interpose " WITH * " (map #(createnode->cypher % scope) nodesToCreate)))))
-                 edgesToCreate (filter-elem 'edge (-> r :create second :els))
-                 existingNodes (concat (map #(-> % first name symbol) nodesToRematch)
-                                       (map #(-> % second :id) nodesToCreate))
-                 edgesToCreateStr (if (empty? edgesToCreate)
-                                    ""
-                                    (str " WITH * " (apply str (interpose " WITH * " (map (partial createedge->cypher existingNodes) edgesToCreate)))))
-                 qstr (str "MATCH (_g:`__Graph` {uid:\"" g "\"}) WITH * "
-                           nodesToRematchStr
-                           " WITH * " edgesToRematchStr
-                           " CREATE (_gn:`__Graph`{uid: apoc.create.uuid()})-[:prov{rule:\"" n "\"}]->(_g) "
-                           " WITH * "
-                           nodesToCreateStr
-                           nodesToReadStr2
-                           edgesToCreateStr
-                           itemsDeleteStr
-
-                           "with _gn optional match (_gn) -[:prov*0..]->()-[:create]->(_el) "
-                           " where not (_gn) -[:prov*0..]->()-[:delete]->(_el) "
-                           " with _gn, collect (_el._fp) as _fps "
-                           " set _gn._fps = apoc.coll.sort(_fps)"
-                           " with _gn set _gn._fp=apoc.hashing.fingerprint (_gn, ['uid']) "
-                           "with _gn optional match (_gconf:`__Graph`{`_fp`:_gn.`_fp`}) "
-                           " where  ID(_gn) <> ID(_gconf) and exists ((_gconf)-[:prov*0..]->()<-[:prov*0..]-(_gn) )"
-                           " create (_gn)-[:conf]->(_gconf)"
-
-                           (if (empty? (:delete r)) ""
-                               (if (or (some #{'DANG} (:gcond r)) (some #{'GLUE} (:gcond r)))
-                                 (str
-                                  " with * call { with _gn match(_gn)-[:delete]->(_nd:`__Node`)<-[:tar]-(_e1) RETURN collect(_e1) as _cont UNION "
-                                  " match(_gn)-[:delete]->(_nd:`__Node`)<-[:src]-(_e2) RETURN collect(_e2) as _cont } "
-                                  " with * call { with _gn match(_gn)-[:delete]->(_ed:`__Edge`) RETURN collect(_ed) as _deled } "
-                                  " with * match(_gn) where _deled = _cont ")
-                                 (str
-                                  " with * call { with _gn match(_gn)-[:delete]->(_nd:`__Node`)<-[:tar]-(_e) "
-                                  " merge (_gn)-[:delete]->(_e) } "
-                                  " with * call { with _gn match(_gn)-[:delete]->(_nd:`__Node`)<-[:src]-(_e) "
-                                  " merge (_gn)-[:delete]->(_e) } ")))
-                           " RETURN _gn {.uid}")]
-             (->
-              (dbquery qstr)
-              first
-              :_gn :uid
-              list))))
 
 (defn search-and-derive [g n pars]
   (let [_ (debug println "*** SEARCH & DERIVE ")
@@ -864,8 +710,6 @@
   (let [grs (apply str (interpose " , " (map #(str "'" % "'") gr)))]
     (filter #(not (removeConfluent-loc- % grs)) gr)))
 
-(def dist removeConfluent-loc)
-
 
 ;(defn- exec- [g n par]
 ;  (let [redexes (search g n par)]
@@ -1014,14 +858,14 @@
     res))
 
 (defn rollback []
-  (dbquery "MATCH (gt:`__Graph`)-[:prov*0..]->(gp:`__Graph`) 
+  (dbquery " call apoc.periodic.iterate ( \"MATCH (gt:`__Graph`)-[:prov*0..]->(gp:`__Graph`) 
    WHERE gt.tag IS NOT NULL  with collect(gp.uid) as transacted 
-   with transacted call { with transacted 
-            match (g:`__Graph`) where not g.uid in transacted 
-   with * OPTIONAL MATCH (g)-[:create]->(i) 
-   with * OPTIONAL MATCH (g)-[:inve]->(e) 
-   with * OPTIONAL MATCH (g)-[:inva]->(a) 
-            detach delete g,i,e,a }")
+   with transacted 
+            match (g:`__Graph`) where not g.uid in transacted return g\",
+   \" OPTIONAL MATCH (g)-[:create]->(i) detach delete i
+   with g OPTIONAL MATCH (g)-[:inve]->(e) detach delete e
+   with g OPTIONAL MATCH (g)-[:inva]->(a) detach delete a,g \",
+           {batchSize:10000, parallel:false} ) ")
   true)
 
 (defn commit [g t]
@@ -1078,21 +922,7 @@
                                    "OPT    := :merge true | :opt true"))]
     (check-syntax (symbol? id) "HANDLE should be a symbol."))
   ['node (assoc rest :id id)])
-(comment
-  (defn node- [h args]
-    (let [s (str/split (str h) #":")
-          s1 (first s)
-          s2 (second s)
-          id (if (or (empty? s1) (= "_" s1))
-               (symbol (random-id))
-               (symbol s1))
 
-          argsmap (zipmap (take-nth 2 args)
-                          (take-nth 2 (rest args)))
-          args2 (if (empty? s2)
-                  argsmap
-                  (merge argsmap {:label s2}))]
-      (node-os id args2))))
 
 (defn node- [h args]
   (let [s (str/split (str h) #":")
