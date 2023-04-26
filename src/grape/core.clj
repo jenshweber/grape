@@ -332,7 +332,7 @@
      (if (empty? label) ":__Node" (str ":__Node:" label))
      (asserts->cypher pars ass)
      ")"
-     "WHERE ID(" handle ") IN _active ")))
+     "WHERE ID(" handle ") IN _g.active ")))
 
 (defn conditions->cypher [c scope]
   (resolve-value scope (second c)))
@@ -362,7 +362,7 @@
        " match (") 
      (:src p) ")<-[" (:id p) "_s:src]-(" (:id p) ":`__Edge`"
      (if (empty? (:label p)) "" (str ":" (:label p))) ")-[" (:id p) "_t:tar]->(" (:tar p) ")"
-     " WHERE ID(" (:id p) ") IN _active ")))
+     " WHERE ID(" (:id p) ") IN _g.active ")))
 
 (defn createedge->cypher [enodes e]
   (let [p (second e)
@@ -374,11 +374,11 @@
       (str
        " CREATE ( " handle " :`__Edge`:" (:label p) ") <-[:create{handle:'" handle "'}]-(_gn)"
        " CREATE ( " target " )<-[:tar]-(" handle ") -[:src]->(" source " )"
-       " SET " handle ".src=ID(" source "), "
+       " SET " handle ".src= ID(" source "), "
        handle ".tar=ID(" target "), "
        handle "._fps=" source "._fp, "
        handle "._fpt=" target "._fp, "
-       handle "._fpd= apoc.coll.different([ID( " source "), ID(" target ")]) "
+       handle "._fpd= apoc.coll.different([ ID( " source "), ID(" target ")]) "
        " SET "
        handle "._fp=apoc.hashing.fingerprint("  handle
        ", ['tar', 'src']) ")
@@ -397,13 +397,13 @@
     (let [nc (combo/combinations (distinct (all-ids nodes)) 2)
           ec (combo/combinations (distinct (all-ids edges)) 2)
           ;_ (println "\n\n **** " nc " --- " ec " \n\n ")
-          f (fn [x] (str "ID(" (first x) ")<>ID(" (second x) ")"))
+          f (fn [x] (str " ID(" (first x) ")<> ID(" (second x) ")"))
           ni (map f nc)
           ei (map f ec)]
       (reduce (partial str-sep " AND ") (concat ni ei)))))
 
 (defn- exclothers [others ditem]
-  (map #(str " (ID(" ditem ")<> ID(" % ") OR " ditem " IS NULL OR " % " IS NULL)") others))
+  (map #(str " ( ID(" ditem ")<> ID(" % ") OR " ditem " IS NULL OR " % " IS NULL)") others))
 
 (defn gen-identification-condition [itemsToDelete nodes edges]
   (if (empty? itemsToDelete)
@@ -416,7 +416,7 @@
 (defn readnodeRet->cypher [n]
   (let [id (-> n second :id)]
     (str id "{.*, "
-         "id:ID(" id "), "
+         "id: ID(" id "), "
          "labels:labels(" id ")} ")))
 
 (defn third [v] (nth v 2))
@@ -427,7 +427,7 @@
     '()
     (let [ec (combo/cartesian-product (all-ids newitems) (all-ids olditems))
           ;_ (println "\n\n **** " nc " --- " ec " \n\n ")
-          f (fn [x] (str "ID(" (first x) ")<>ID(" (second x) ")"))]
+          f (fn [x] (str " ID(" (first x) ")<> ID(" (second x) ")"))]
       (map f ec))))
 
 (defn nac->cypher [nac bnodes bedges scope]
@@ -442,7 +442,7 @@
                                                      (gen-constraint-new nedges bedges))))
           wstr (apply str
                       (interpose ", "
-                                 (concat (list "_active")
+                                 (concat (list "_g")
                                   (map (fn [x] (-> x second :id str))
                                        (concat bnodes bedges)))))]
       (str " WITH * call { with " wstr " "
@@ -466,10 +466,7 @@
         conditions (filter-elem 'cond (-> r :if second :els))
         conditionsStr (apply str (interpose " AND " (map #(conditions->cypher % scope) conditions)))
         qstr (str "MATCH (_g:`__Graph` {uid:\"" g "\"}) "
-                  " WITH * call { with _g optional match (_g)-[:prov*0..]->()-[:create]->(o)"
-" where not exists ((o)<-[:delete]-()<-[:prov*0..]-(_g)) "
-" return collect(ID(o)) as _active } "
-                  " WITH * "
+                  " WITH _g "
                   nodesToReadStr
                   " WITH * " edgesToReadStr
 
@@ -536,10 +533,6 @@
         qstr (str "MATCH (_g:`__Graph` {uid:\"" g "\"}) WITH * "
                   nodesToRematchStr
                   " WITH * " edgesToRematchStr
-                  " WITH * call { with _g optional match (_g)-[:prov*0..]->()-[:create]->(o)"
-" where not exists ((o)<-[:delete]-()<-[:prov*0..]-(_g)) "
-" return collect(ID(o)) as _active } "
-
                   " WITH * "
                   nodesToReadStr
                   " "
@@ -578,9 +571,6 @@
                                 scope)
         itemsToDelete (:delete r)
         qstr (str "MATCH (_g:`__Graph` {uid:\"" g "\"}) "
-                  " WITH * call { with _g optional match (_g)-[:prov*0..]->()-[:create]->(o)"
-                  " where not exists ((o)<-[:delete]-()<-[:prov*0..]-(_g)) "
-                  " return collect(ID(o)) as _active } "
                   " WITH * "
                   nodesToReadStr
                   " WITH * " edgesToReadStr
@@ -617,17 +607,25 @@
                            ""
                            (str " WITH * " (apply str (interpose " WITH * " (map (partial createedge->cypher existingNodes) edgesToCreate)))))
 
-        qstr2 (str "with * CREATE (_gn:`__Graph`{uid: apoc.create.uuid()})-[:prov{rule:\"" n "\"}]->(_g) "
+        createdEls (concat (map #(-> % second :id) nodesToCreate)
+                           (map #(-> % second :id) edgesToCreate))
+        createdElsIDStr (apply str (interpose "," (map #(str "ID(" % ")") createdEls)))
+       
+        deletedElsIDStr (apply str (interpose "," (map #(str "ID(" % ")") (:delete r))))
+
+        qstr2 (str "with * CREATE (_gn:`__Graph`{uid: randomUUID()})-[:prov{rule:\"" n "\"}]->(_g) "
                    " WITH * "
                    nodesToReadStr2
                    nodesToCreateStr
                    edgesToCreateStr
                    itemsDeleteStr
 
+                   (str " with * "
+                        " set _gn.active = apoc.coll.unionAll(apoc.coll.removeAll(_g.active,[" deletedElsIDStr "]),[" createdElsIDStr "]) ")
+                   
                    (if (checkeq?)
                      (str
-                      "with _gn optional match (_gn) -[:prov*0..]->()-[:create]->(_el) "
-                      " where not (_gn) -[:prov*0..]->()-[:delete]->(_el) "
+                      "with _gn optional match (_el) where ID(_el) in _gn.active "
                       " with _gn, collect (_el._fp) as _fps "
                       " set _gn._fps = apoc.coll.sort(_fps)"
                       " with _gn set _gn._fp=apoc.hashing.fingerprint (_gn, ['uid']) "
@@ -750,18 +748,22 @@
                  (apply str (interpose ", " (map (fn [x] (str "\"" x "\"")) gs)))
                  "]")
         qstr (str
-              " create (_gn:__Graph {uid: apoc.create.uuid()}) "
+              " create (_gn:__Graph {uid: randomUUID()}) "
               " with * "
               " match (_g:`__Graph`)-[_p:prov]->(_gp) where _g.uid in " gss
   ;            " and not EXISTS {match (g1:`__Graph`)-[:read]->(e)<-[:delete]-(g2:`__Graph`) where g1.uid in " gss
   ;            "                 and g2.uid in " gss " and g1 <> g2 } "
               " with * merge (_gn)-[:prov{rule:_p.rule + \"*\"}]->(_gp) "
-              " with distinct _g, _gn match (_g)-[:read]->(read) "
-              " with * merge (_gn)-[:read]->(read) "
-              " with distinct _g, _gn  match (_g)-[:delete]->(deleted) "
-              " with * merge (_gn)-[:delete]->(deleted) "
-              " with distinct _g, _gn  match (_g)-[:create]->(created) "
-              " with * merge (_gn)-[:create]->(created) "
+              " with distinct _g, _gn, _gp match (_g)-[:read]->(read) "
+              "                                create (_gn)-[:read]->(read)   "
+              " with distinct _g, _gn, _gp call { with _g, _gn match (_g)-[:delete]->(deleted) "
+              "                                create (_gn)-[:delete]->(deleted) return collect(ID(deleted)) as dels }"
+              " with distinct _g, _gn, _gp, dels call {with _g, _gn  match (_g)-[:create]->(created) "
+              "                                create (_gn)-[:create]->(created) return collect(ID(created)) as creas }"
+              " with _gn, _gp, collect(dels) as delss, collect(creas) as creass "
+              " set _gn.active=apoc.coll.unionAll(apoc.coll.removeAll(_gp.active, "
+              "                              apoc.coll.flatten(delss)),apoc.coll.flatten(creass)) "
+
   ;            " with * detach delete (_g) "
               (if (checkeq?)
                 (str
@@ -804,10 +806,7 @@
         edgesToReturnStr (apply str (interpose "," (map readnodeRet->cypher edgesToRead)))
 
 
-        qstr (str "MATCH (_g:`__Graph` {uid:\"" g "\"}) "
-                  " WITH * call { with _g optional match (_g)-[:prov*0..]->()-[:create]->(o)"
-" where not exists ((o)<-[:delete]-()<-[:prov*0..]-(_g)) "
-" return collect(ID(o)) as _active } "               
+        qstr (str "MATCH (_g:`__Graph` {uid:\"" g "\"}) "         
                   " WITH * "
                   nodesToReadStr
                   " WITH * " edgesToReadStr
@@ -900,7 +899,7 @@
 (defn newgrape []
   "DSL form to create a new graph"
   (let [g (->
-           (dbquery (str "create (g:`__Graph` {uid: apoc.create.uuid()}) return g"))
+           (dbquery (str "create (g:`__Graph` {uid: randomUUID(), active:[]}) return g"))
            first :g :uid list)]
     (set-grape! g)
     g))
@@ -1159,10 +1158,7 @@
 (defn- cons-nodetypes [g nts]
   (let [ntsr (str "[" (apply str (interpose ", " (map #(str "'" % "'") nts))) "]")
         qstr (str "MATCH (_g:`__Graph` {uid:\"" g "\"}) "
-                  " WITH * call { with _g optional match (_g)-[:prov*0..]->()-[:create]->(o)"
-" where not exists ((o)<-[:delete]-()<-[:prov*0..]-(_g)) "
-" return collect(ID(o)) as _active } "
-                  " WITH * match (n:__Node) WHERE ID(n) in _active AND apoc.coll.intersection(labels(n), " ntsr ")=[] return n")]
+                  " WITH * match (n:__Node) WHERE ID(n) in _g.active AND apoc.coll.intersection(labels(n), " ntsr ")=[] return n")]
     (if (empty? (dbquery qstr))
       g
       nil)))
@@ -1170,10 +1166,7 @@
 (defn- cons-edgetypes [g nts]
   (let [ntsr (str "[" (apply str (interpose ", " (map #(str "'" % "'") nts))) "]")
         qstr (str "MATCH (_g:`__Graph` {uid:\"" g "\"}) "
-                  " WITH * call { with _g optional match (_g)-[:prov*0..]->()-[:create]->(o)"
-" where not exists ((o)<-[:delete]-()<-[:prov*0..]-(_g)) "
-" return collect(ID(o)) as _active } "
-                  " WITH * match (n:__Edge) where ID(n) in _active AND  apoc.coll.intersection(labels(n), " ntsr ")=[] return n")]
+                  " WITH * match (n:__Edge) where ID(n) in _g.active AND  apoc.coll.intersection(labels(n), " ntsr ")=[] return n")]
     (if (empty? (dbquery qstr))
       g
       nil)))
@@ -1181,10 +1174,7 @@
 (defn- cons-srctypes [g e nts]
   (let [ntsr (str "[" (apply str (interpose ", " (map #(str "'" % "'") nts))) "]")
         qstr (str "MATCH (_g:`__Graph` {uid:\"" g "\"})  "
-                  " WITH * call { with _g optional match (_g)-[:prov*0..]->()-[:create]->(o)"
-" where not exists ((o)<-[:delete]-()<-[:prov*0..]-(_g)) "
-" return collect(ID(o)) as _active } "
-                  " WITH * match (n:__Edge:" e ")-[:src]->(s) where ID(n) in _active AND  apoc.coll.intersection(labels(s), " ntsr ")=[] return n")]
+                  " WITH * match (n:__Edge:" e ")-[:src]->(s) where ID(n) in _g.active AND  apoc.coll.intersection(labels(s), " ntsr ")=[] return n")]
     (if (empty? (dbquery qstr))
       g
       nil)))
@@ -1192,22 +1182,16 @@
 (defn- cons-tartypes [g e nts]
   (let [ntsr (str "[" (apply str (interpose ", " (map #(str "'" % "'") nts))) "]")
         qstr (str "MATCH (_g:`__Graph` {uid:\"" g "\"})  "
-                  " WITH * call { with _g optional match (_g)-[:prov*0..]->()-[:create]->(o)"
-" where not exists ((o)<-[:delete]-()<-[:prov*0..]-(_g)) "
-" return collect(ID(o)) as _active } "
-                  " WITH * match (n:__Edge:" e ")-[:tar]->(s) where ID(n) in _active AND apoc.coll.intersection(labels(s), " ntsr ")=[] return n")]
+                  " WITH * match (n:__Edge:" e ")-[:tar]->(s) where ID(n) in _g.active AND apoc.coll.intersection(labels(s), " ntsr ")=[] return n")]
     (if (empty? (dbquery qstr))
       g
       nil)))
 
 (defn- cons-tarunique [g e]
   (let [qstr (str "MATCH (_g:`__Graph` {uid:\"" g "\"}) "
-                  " WITH * call { with _g optional match (_g)-[:prov*0..]->()-[:create]->(o)"
-" where not exists ((o)<-[:delete]-()<-[:prov*0..]-(_g)) "
-" return collect(ID(o)) as _active } "
                   " match (n2)<-[:tar]-(e2:__Edge:" e ")-[:src]->(o:__Node)"
-                  "<-[:src]-(e1:__Edge:" e ")-[:tar]->(n) where ID (o) in _active "
-                  " AND ID (e1) in _active AND ID (e2) in _active and ID (n) <>ID (n2) return n")]
+                  "<-[:src]-(e1:__Edge:" e ")-[:tar]->(n) where ID (o) in _g.active "
+                  " AND ID (e1) in _g.active AND ID (e2) in _g.active and ID (n) <>ID (n2) return n")]
     (if (empty? (dbquery qstr))
       g
       nil)))
@@ -1215,12 +1199,9 @@
 
 (defn- cons-srcunique [g e]
   (let [qstr (str "MATCH (_g:`__Graph` {uid:\"" g "\"}) "
-                  " WITH * call { with _g optional match (_g)-[:prov*0..]->()-[:create]->(o)"
-" where not exists ((o)<-[:delete]-()<-[:prov*0..]-(_g)) "
-" return collect(ID(o)) as _active } "
                   " match (n2)<-[:src]-(e2:__Edge:" e ")-[:tar]->(o:__Node)"
-                  "<-[:tar]-(e1:__Edge:" e ")-[:src]->(n) where ID (o) in _active "
-                  " AND ID (e1) in _active AND ID (e2) in _active and ID (n) <>ID (n2) return n")]
+                  "<-[:tar]-(e1:__Edge:" e ")-[:src]->(n) where ID (o) in _g.active "
+                  " AND ID (e1) in _g.active AND ID (e2) in _g.active and ID (n) <>ID (n2) return n")]
     (if (empty? (dbquery qstr))
       g
       nil)))
@@ -1286,11 +1267,8 @@
                    "FOR (n:" l ") "
                    "ON (n." a ") ")
         qstr2 (str "MATCH (_g:`__Graph` {uid:\"" g "\"})"
-                  " WITH * call { with _g optional match (_g)-[:prov*0..]->()-[:create]->(o)"
-" where not exists ((o)<-[:delete]-()<-[:prov*0..]-(_g)) "
-" return collect(ID(o)) as _active } "
-                   " WITH * match(n1:" l ") WHERE ID(n1) in _active "
-                   " WITH * match(n2:" l ") WHERE ID(n2) in _active  and ID(n1) <> ID(n2) "
+                   " WITH * match(n1:" l ") WHERE ID(n1) in _g.active "
+                   " WITH * match(n2:" l ") WHERE ID(n2) in _g.active  and ID(n1) <> ID(n2) "
                    " AND n1." a " = n2." a " return n1")]
     (dbquery qstr1)
     (if (empty? (dbquery qstr2))
@@ -1333,7 +1311,7 @@
 (defn occnodes [g kind]
   "return the occurance of kind nodes for graph g"
   (let [qstr (str "match(g:`__Graph` {uid:'" g "'}) -[e:" kind "]->(n:`__Node`) "
-                  " RETURN n{.*, labels: labels(n), id:ID(n), handle:e.handle}  ")]
+                  " RETURN n{.*, labels: labels(n), id: ID(n), handle:e.handle}  ")]
     (map first (dbquery qstr))))
 
 (defn occdelnodes [g]
@@ -1395,7 +1373,7 @@
                     (map #(str (-> % first name) ": " (-> % second pr-str))))
         attrstr (apply str (interpose " | " attrs))]
     (str "\"" pref id "\" [shape=Mrecord penwidth=bold style=filled fillcolor=aliceblue label=\"{" handle ":" label
-        ; "(" id ")"
+         "(" id ")"
          (if (not (empty? attrstr))
            (str " | " (str/escape attrstr {\" "'"}))
            "")
@@ -1506,7 +1484,7 @@
         qstr (str "match(g:`__Graph`{uid:\"" g "\"})
                      -[:prov*0..]->(g0:`__Graph`) 
                      where not exists( (g0)-[:prov]->() ) 
-                     with g0 create (gn:`__Graph`{uid:apoc.create.uuid()}) with g0,gn  
+                     with g0 create (gn:`__Graph`{uid:randomUUID()}) with g0,gn  
                      match (g0)<-[:prov*0..]-(g1:`__Graph`) 
                      with g0,g1,gn 
                      create(g1g:Graph:`__Node`{uid:g1.uid, tag:g1.tag})<-[:create]-(gn) 
@@ -1518,7 +1496,7 @@
                           with * create (gn)-[:create]->(e:__Edge:occ{rule:p.rule})-[:src]->(g2g) 
                           with * create(e)-[:tar]->(g1g)
                           with * call { with g1 match (g1)-[p:prov*1..]->(gx:`__Graph`) return count(*) as steps}
-                          set e.src=ID(g2g), e.tar=ID(g1g),
+                          set e.src= ID(g2g), e.tar= ID(g1g),
                               e.step=steps
                                                 } 
                      with *
@@ -1530,7 +1508,7 @@
         qstr (str "match(g:`__Graph`{uid:\"" g "\"})
                      -[:prov*0..]->(g0:`__Graph`) 
                      where not exists( (g0)-[:prov]->() ) 
-                     with g0 create (gn:`__Graph`{uid:apoc.create.uuid()}) with g0,gn  
+                     with g0 create (gn:`__Graph`{uid:randomUUID()}) with g0,gn  
                      match (g0)<-[:prov*0..]-(g1:`__Graph`) 
                      with g0,g1,gn 
                      create(g1g:Graph:`__Node`{uid:g1.uid, tag:g1.tag})<-[:create]-(gn) 
@@ -1542,7 +1520,7 @@
                           with * create (gn)-[:create]->(e:__Edge:occ{rule:p.rule})-[:src]->(g2g) 
                           with * create(e)-[:tar]->(g1g)
                           with * call { with g1 match (g1)-[p:prov*1..]->(gx:`__Graph`) return count(*) as steps}
-                          set e.src=ID(g2g), e.tar=ID(g1g),
+                          set e.src= ID(g2g), e.tar= ID(g1g),
                               e.step=steps
                                                 } 
                      with *
@@ -1551,7 +1529,7 @@
 
 (defn- trace [g]
   (let [qstr (str "match(g:`__Graph`{uid:\"" g "\"})
-                     with * create (gn:`__Graph`{uid:apoc.create.uuid()}) 
+                     with * create (gn:`__Graph`{uid:randomUUID()}) 
                      with * match (g)-[:prov*0..]->(g1:`__Graph`) 
                      with * 
                      create(g1g:Graph:`__Node`{uid:g1.uid, tag:g1.tag})<-[:create]-(gn) 
@@ -1563,7 +1541,7 @@
                           with * create (gn)-[:create]->(e:__Edge:occ{rule:p.rule})-[:src]->(g2g) 
                           with * create(e)-[:tar]->(g1g)
                           with * call { with g1 match (g1)-[p:prov*1..]->(gx:`__Graph`) return count(*) as steps}
-                          set e.src=ID(g2g), e.tar=ID(g1g),
+                          set e.src= ID(g2g), e.tar= ID(g1g),
                               e.step=steps
                                                 } 
                      with *
@@ -1732,19 +1710,16 @@
               "CREATE (v:__View{name:\"" tag "\"}) "
               " WITH v "
               " MATCH (_g:`__Graph` {uid:\"" (first gs) "\"}) "
-                  " WITH * call { with _g optional match (_g)-[:prov*0..]->()-[:create]->(o)"
-" where not exists ((o)<-[:delete]-()<-[:prov*0..]-(_g)) "
-" return collect(ID(o)) as _active } "
-              " WITH * match(n:__Node) WHERE ID(n) IN _active "
-              " WITH distinct n,_active,v CALL apoc.refactor.cloneNodes([n], true, [\"_fp\"]) YIELD output "
+              " WITH * match(n:__Node) WHERE ID(n) IN _g.active "
+              " WITH distinct n,_g,v CALL apoc.refactor.cloneNodes([n], true, [\"_fp\"]) YIELD output "
         ;        " WITH v, output, _active SET output.name=\"c\" "
-              " WITH v, output, _active CREATE (v)-[:c]->(output) "
+              " WITH v, output, _g CREATE (v)-[:c]->(output) "
 
               " WITH * MATCH (output)-[gr]-(:__Graph) DELETE gr "
 
               " WITH * REMOVE output:__Node "
 
-              " WITH _active,v match (v)-[:c]->(n1)<-[:src]-(e:__Edge)-[:tar]->(n2)<-[:c]-(v) WHERE ID(e) IN _active "
+              " WITH _g,v match (v)-[:c]->(n1)<-[:src]-(e:__Edge)-[:tar]->(n2)<-[:c]-(v) WHERE ID(e) IN _g.active "
               " WITH distinct e, v "
               " CALL apoc.refactor.cloneNodes([e], true, [\"_fp\",\"_fpd\", \"_fps\", \"_fpt\", \"src\", \"tar\"]) "
               " YIELD output "
@@ -1778,7 +1753,7 @@
 
 (defn plant [tag]
   (let [qstr (str
-              "CREATE (_gn:`__Graph`{uid: apoc.create.uuid()}) "
+              "CREATE (_gn:`__Graph`{uid: randomUUID()}) "
               "WITH _gn "
               "MATCH (v:`__View`{name:\"" tag "\"}) "
               "with * OPTIONAL MATCH (v)-[:c]->(n) "
@@ -1786,7 +1761,7 @@
               "with * create (_gn)-[:create]->(nc) "
               "with * match(v)-[e:c]->(nc) delete e "
               "with * CALL { with _gn match (_gn)-[:create]->(nn) "
-              "              return collect (ID(nn)) as nids} "
+              "              return collect ( ID(nn)) as nids} "
               "with nids, _gn "
               "match (n1)-[e]->(n2) where ID(n1) IN nids and ID(n2) IN nids "
               "CALL apoc.refactor.extractNode(e,[TYPE(e), '__Edge'],'tar','src') "
@@ -1809,14 +1784,13 @@
                "  set n._fp=apoc.hashing.fingerprint(n) "
                "with _gn "
                "match (_gn)-[:create]->(ns:__Node)<-[:src]-(e:__Edge)-[:tar]->(nt) "
-               " SET e.src=ID(ns), e.tar=ID(nt), e._fps=ns._fp, e._fpt=nt._fp, "
-               " e._fpd= apoc.coll.different([ID(ns), ID(nt)]) "
+               " SET e.src= ID(ns), e.tar= ID(nt), e._fps=ns._fp, e._fpt=nt._fp, "
+               " e._fpd= apoc.coll.different([ ID(ns), ID(nt)]) "
                " SET e._fp=apoc.hashing.fingerprint( e, ['tar', 'src']) "
 
                "with _gn optional match (_gn) -[:prov*0..]->()-[:create]->(_el) "
-               " with _gn, collect (_el._fp) as _fps "
-               " with _gn, _fps "
-               " set _gn._fps = apoc.coll.sort(_fps) "
+               " with _gn, collect (_el._fp) as _fps, collect( ID(_el)) as els "
+               " set _gn._fps = apoc.coll.sort(_fps), _gn.active=els "
                " with _gn set _gn._fp=apoc.hashing.fingerprint (_gn, ['uid']) ")]
     (dbquery qstr2)
     (list g)))
