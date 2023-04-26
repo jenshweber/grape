@@ -761,7 +761,7 @@
               "                                create (_gn)-[:delete]->(deleted) return collect(ID(deleted)) as dels }"
               " with  _g, _gn, _gp, dels call {with _g, _gn  match (_g)-[:create]->(created) "
               "                                create (_gn)-[:create]->(created) return collect(ID(created)) as creas }"
-              " with _g, _gn, _gp, dels, creas call { with distinct _g detach delete _g }"
+              " with _g, _gn, _gp, dels, creas call { with _g detach delete _g }"
               " with _gn, _gp, collect(dels) as delss, collect(creas) as creass "
               " set _gn.active=apoc.coll.unionAll(apoc.coll.removeAll(_gp.active, "
               "                              apoc.coll.flatten(delss)),apoc.coll.flatten(creass)) "
