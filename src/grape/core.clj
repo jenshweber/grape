@@ -620,20 +620,6 @@
                    edgesToCreateStr
                    itemsDeleteStr
 
-                   (str " with * "
-                        " set _gn.active = apoc.coll.unionAll(apoc.coll.removeAll(_g.active,[" deletedElsIDStr "]),[" createdElsIDStr "]) ")
-                   
-                   (if (checkeq?)
-                     (str
-                      "with _gn optional match (_el) where ID(_el) in _gn.active "
-                      " with _gn, collect (_el._fp) as _fps "
-                      " set _gn._fps = apoc.coll.sort(_fps)"
-                      " with _gn set _gn._fp=apoc.hashing.fingerprint (_gn, ['uid']) "
-                      "with _gn optional match (_gconf:`__Graph`{`_fp`:_gn.`_fp`}) "
-                      " where  ID(_gn) <> ID(_gconf) and exists ((_gconf)-[:prov*0..]->()<-[:prov*0..]-(_gn) )"
-                      " create (_gn)-[:conf]->(_gconf)")
-                     " ")
-
                    (if (empty? (:delete r)) ""
                        (if (or (some #{'DANG} (:gcond r)) (some #{'GLUE} (:gcond r)))
                          (str
@@ -646,6 +632,21 @@
                           " merge (_gn)-[:delete]->(_e) } "
                           " with * call { with _gn match(_gn)-[:delete]->(_nd:`__Node`)<-[:src]-(_e) "
                           " merge (_gn)-[:delete]->(_e) } ")))
+
+                   (str " with * "
+                        " set _gn.active = apoc.coll.unionAll(apoc.coll.removeAll(_g.active,[" deletedElsIDStr "]),[" createdElsIDStr "]) ")
+                   (if (checkeq?)
+                     (str
+                      "with _gn optional match (_el) where ID(_el) in _gn.active "
+                      " with _gn, collect (_el._fp) as _fps "
+                      " set _gn._fps = apoc.coll.sort(_fps)"
+                      " with _gn set _gn._fp=apoc.hashing.fingerprint (_gn, ['uid']) "
+                      "with _gn optional match (_gconf:`__Graph`{`_fp`:_gn.`_fp`}) "
+                      " where  ID(_gn) <> ID(_gconf) and exists ((_gconf)-[:prov*0..]->()<-[:prov*0..]-(_gn) )"
+                      " create (_gn)-[:conf]->(_gconf)")
+                     " ")
+
+
                    " RETURN distinct _gn {.uid}")]
     (->>
      (dbquery (str qstr qstr2))
@@ -756,15 +757,14 @@
               " with * merge (_gn)-[:prov{rule:_p.rule + \"*\"}]->(_gp) "
               " with distinct _g, _gn, _gp match (_g)-[:read]->(read) "
               "                                create (_gn)-[:read]->(read)   "
-              " with distinct _g, _gn, _gp call { with _g, _gn match (_g)-[:delete]->(deleted) "
+              " with  _g, _gn, _gp call { with _g, _gn match (_g)-[:delete]->(deleted) "
               "                                create (_gn)-[:delete]->(deleted) return collect(ID(deleted)) as dels }"
-              " with distinct _g, _gn, _gp, dels call {with _g, _gn  match (_g)-[:create]->(created) "
+              " with  _g, _gn, _gp, dels call {with _g, _gn  match (_g)-[:create]->(created) "
               "                                create (_gn)-[:create]->(created) return collect(ID(created)) as creas }"
+              " with _g, _gn, _gp, dels, creas call { with distinct _g detach delete _g }"
               " with _gn, _gp, collect(dels) as delss, collect(creas) as creass "
               " set _gn.active=apoc.coll.unionAll(apoc.coll.removeAll(_gp.active, "
               "                              apoc.coll.flatten(delss)),apoc.coll.flatten(creass)) "
-
-  ;            " with * detach delete (_g) "
               (if (checkeq?)
                 (str
                  " with _gn optional match (_gn) -[:prov*0..]->()-[:create]->(_el) "
