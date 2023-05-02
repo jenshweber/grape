@@ -118,7 +118,7 @@
   [nac]
   (let [c "darkviolet"
         p (nth nac 2)]
-    (pattern->dot p [] c c " style=filled arrowhead=normalicurvecurve fillcolor=violet")))
+    (pattern->dot p [] c c " style=filled arrowhead=normal fillcolor=violet")))
 
 (defn cond->dot
   "translate a condition to dot"
@@ -242,6 +242,14 @@
 (defn checkeq? []
   (deref checkeq-atom))
 
+(def batchsize-atom (atom 10000))
+
+(defn batchsize! [b]
+  (swap! batchsize-atom (fn [_] b)))
+
+(defn batchsize? []
+  (deref batchsize-atom))
+
 
 (defn rules []
   (deref rules-atom))
@@ -351,7 +359,9 @@
          (asserts->cypher pars ass)
          ")"
          "<-[:create{handle:'" handle "'}]-(_gn)  "
-         "set " handle "._fp=apoc.hashing.fingerprint(" handle ") ")))
+         (if (checkeq?)
+           (str "set " handle "._fp=apoc.hashing.fingerprint(" handle ") ")
+           " "))))
 
 
 (defn readedge->cypher [e]
@@ -374,14 +384,18 @@
       (str
        " CREATE ( " handle " :`__Edge`:" (:label p) ") <-[:create{handle:'" handle "'}]-(_gn)"
        " CREATE ( " target " )<-[:tar]-(" handle ") -[:src]->(" source " )"
-       " SET " handle ".src= ID(" source "), "
-       handle ".tar=ID(" target "), "
-       handle "._fps=" source "._fp, "
-       handle "._fpt=" target "._fp, "
-       handle "._fpd= apoc.coll.different([ ID( " source "), ID(" target ")]) "
-       " SET "
-       handle "._fp=apoc.hashing.fingerprint("  handle
-       ", ['tar', 'src']) ")
+
+       (if (checkeq?)
+         (str
+          " SET " handle ".src= ID(" source "), "
+          handle ".tar=ID(" target "), "
+          handle "._fps=" source "._fp, "
+          handle "._fpt=" target "._fp, "
+          handle "._fpd= apoc.coll.different([ ID( " source "), ID(" target ")]) "
+          " SET "
+          handle "._fp=apoc.hashing.fingerprint("  handle
+          ", ['tar', 'src']) ")
+         " "))
       " ")))
 
 (defn delitem->cypher [i]
@@ -555,146 +569,7 @@
 
 
 
-(defn search-and-derive-int [g n pars parallel?]
-  (let [_ (debug println "*** SEARCH & DERIVE ")
-        r ((rules) n)
-        scope (zipmap (:params r) pars)
-        nodesToRead (filter-elem 'node (-> r :read second :els))
-        nodesToReadStr (apply str (interpose " WITH * " (map #(readnode->cypher % scope) nodesToRead)))
-        nodesToReadStr2 (apply str (interpose " WITH * " (map readnode->cypher2 nodesToRead)))
 
-        edgesToRead (filter-elem 'edge (-> r :read second :els))
-        edgesToReadStr (apply str (interpose " WITH * " (map readedge->cypher edgesToRead)))
-        conditions (filter-elem 'cond (-> r :read second :els))
-        conditionsStr (apply str (interpose " AND " (map #(conditions->cypher % scope) conditions)))
-        nacToCheck (nac->cypher (first (filter-elem 'NAC (-> r :read second :els)))
-                                nodesToRead
-                                edgesToRead
-                                scope)
-        itemsToDelete (:delete r)
-        qstr (str
-
-              "MATCH (_g:`__Graph` {uid:'" g "'}) "
-              " WITH * "
-              nodesToReadStr
-              " WITH * " edgesToReadStr
-
-              (if (some #{'INJ} (:gcond r))
-                (let [st (gen-constraint-isomorphism nodesToRead edgesToRead)]
-                  (if (empty? st)
-                    ""
-                    (str " WITH * WHERE " st)))
-
-                (if (or (some #{'ID} (:gcond r)) (some #{'GLUE} (:gcond r)))
-                  (gen-identification-condition itemsToDelete nodesToRead edgesToRead)
-                  ""))
-
-              nacToCheck
-
-              (if (empty? conditionsStr)
-                ""
-                (str " WITH * WHERE " conditionsStr " "))
-              
-              " WITH distinct * "
-
-      ;        (if parallel?
-       ;         " CALL { "
-        ;        ""))
-        )
-
-        ; **** SEARCH PART DONE
-
-        itemsDeleteStr (if (empty? (:delete r))
-                         " "
-                         (str " WITH * " (apply str (interpose " WITH * " (map delitem->cypher (:delete r))))))
-        nodesToCreate (filter-elem 'node (-> r :create second :els))
-        nodesToCreateStr (if (empty? nodesToCreate)
-                           ""
-                           (str " WITH * " (apply str (interpose " WITH * " (map #(createnode->cypher % scope) nodesToCreate)))))
-        edgesToCreate (filter-elem 'edge (-> r :create second :els))
-        existingNodes (concat (map #(-> % second :id) nodesToRead)
-                              (map #(-> % second :id) nodesToCreate))
-        edgesToCreateStr (if (empty? edgesToCreate)
-                           ""
-                           (str " WITH * " (apply str (interpose " WITH * " (map (partial createedge->cypher existingNodes) edgesToCreate)))))
-
-        createdEls (concat (map #(-> % second :id) nodesToCreate)
-                           (map #(-> % second :id) edgesToCreate))
-        createdElsIDStr (apply str (interpose "," (map #(str "ID(" % ")") createdEls)))
-       
-        deletedElsIDStr (apply str (interpose "," (map #(str "ID(" % ")") (:delete r))))
-
-        qstr2 (str "with * CREATE (_gn:`__Graph`{uid: randomUUID() " 
-                   (if parallel? ", temp: true" "") "})-[:prov{rule:'" n "'}]->(_g) "
-                   " WITH * "
-                   nodesToReadStr2
-                   nodesToCreateStr
-                   edgesToCreateStr
-                   itemsDeleteStr
-
-                   (if (empty? (:delete r)) ""
-                       (if (or (some #{'DANG} (:gcond r)) (some #{'GLUE} (:gcond r)))
-                         (str
-                          " with * call { with _gn match(_gn)-[:delete]->(_nd:`__Node`)<-[:tar]-(_e1) RETURN collect(_e1) as _cont UNION "
-                          " match(_gn)-[:delete]->(_nd:`__Node`)<-[:src]-(_e2) RETURN collect(_e2) as _cont } "
-                          " with * call { with _gn match(_gn)-[:delete]->(_ed:`__Edge`) RETURN collect(_ed) as _deled } "
-                          " with * match(_gn) where _deled = _cont ")
-                         (str
-                          " with * call { with _gn match(_gn)-[:delete]->(_nd:`__Node`)<-[:tar]-(_e) "
-                          " merge (_gn)-[:delete]->(_e) } "
-                          " with * call { with _gn match(_gn)-[:delete]->(_nd:`__Node`)<-[:src]-(_e) "
-                          " merge (_gn)-[:delete]->(_e) } ")))
-
-                   (str " with * "
-                        " set _gn.active = apoc.coll.unionAll(apoc.coll.removeAll(_g.active,[" deletedElsIDStr "]),[" createdElsIDStr "]) ")
-                   (if (checkeq?)
-                     (str
-                      "with _gn optional match (_el) where ID(_el) in _gn.active "
-                      " with _gn, collect (_el._fp) as _fps "
-                      " set _gn._fps = apoc.coll.sort(_fps)"
-                      " with _gn set _gn._fp=apoc.hashing.fingerprint (_gn, ['uid']) "
-                      "with _gn optional match (_gconf:`__Graph`{`_fp`:_gn.`_fp`}) "
-                      " where  ID(_gn) <> ID(_gconf) and exists ((_gconf)-[:prov*0..]->()<-[:prov*0..]-(_gn) )"
-                      " create (_gn)-[:conf]->(_gconf)")
-                     " ")
-
-                   (if parallel?
-                    ; (str "} in transactions of 1000 rows with distinct _g as _gp "
-                     (str " with distinct _g as _gp "
-
-                          " create (_gn:__Graph {uid: randomUUID()}) -[:prov{rule:'" (str n "*") "'}]->(_gp) "
-  ;     (comment 
-         " with _gn, _gp "
-                          " match (_g:`__Graph` {temp:true})-[:prov]->(_gp) "
-  ;            " and not EXISTS {match (g1:`__Graph`)-[:read]->(e)<-[:delete]-(g2:`__Graph`) where g1.uid in " gss
-  ;            "                 and g2.uid in " gss " and g1 <> g2 } "
-                          " with distinct _g, _gn, _gp  match (_g)-[:read]->(read) "
-                          "                                create (_gn)-[:read]->(read)   "
-                          " with  _g, _gn, _gp call { with _g, _gn match (_g)-[:delete]->(deleted) "
-                          "                                create (_gn)-[:delete]->(deleted) return collect(ID(deleted)) as dels } "
-                          " with  _g, _gn, _gp, dels call {with _g, _gn  match (_g)-[:create]->(created) "
-                          "                                create (_gn)-[:create]->(created) return collect(ID(created)) as creas } "
-                          " with _g, _gn, _gp, dels, creas call { with _g detach delete _g } "
-                          " with distinct _gn, _gp, collect(dels) as delss, collect(creas) as creass "
-                          " set _gn.active=apoc.coll.unionAll(apoc.coll.removeAll(_gp.active, "
-                          "                              apoc.coll.flatten(delss)),apoc.coll.flatten(creass)) "
-                          (if (checkeq?)
-                            (str
-                             " with _gn optional match (_gn) -[:prov*0..]->()-[:create]->(_el) "
-                             " with _gn, collect (_el._fp) as _fps "
-                             " with _gn, _fps "
-                             " set _gn._fps = apoc.coll.sort(_fps) "
-                             " with _gn set _gn._fp=apoc.hashing.fingerprint (_gn, ['uid']) ")
-                            " "))
-                          "")
-           ;        ); end comment
-
-                          " return distinct _gn {.uid} ")
-                   ]
-    (->>
-     (dbquery (str qstr qstr2))
-     (map :_gn)
-     (map :uid))))
 
 (defn search-and-derive [g n limit pars]
   (let [_ (debug println "*** SEARCH & DERIVE ")
@@ -735,7 +610,7 @@
                     (str " WITH * WHERE " conditionsStr " "))
                   
                   (if (> limit 0)
-                    (str " WITH * LIMIT " limit " ")
+                    (str " WITH distinct * LIMIT " limit " ")
                     " "
                   ))
 
@@ -802,6 +677,9 @@
      (map :uid))))
 
 
+
+
+
 (defn- get-inv [g]
   (debug println "*** CHECK INVARIANTS ")
   (->
@@ -865,23 +743,16 @@
 
 
 (defn exec-all [gs n limit par]
-  (let [res (map #(search-and-derive % n limit par) gs)
+  (let [res (map #(search-and-derive % n limit  par) gs)
         gn (reduce concat res)
         gne (check-invariants gn)]
     (if (not (empty? gne))
       (set-grape! gne))
     gne))
 
-(defn exec= [gs n par]
+(defn exec= [gs n limit par]
   (let [_ (debug println "\n\n***************************"
                  "\n**** EXECUTING RULE: " n " - non-distinct mode (=)"
-                 "\n***************************\n")
-        gne (exec-all gs n 0 par)]
-    gne))
-
-(defn exec< [gs n limit par]
-  (let [_ (debug println "\n\n***************************"
-                 "\n**** EXECUTING RULE: " n " - limited mode (<)"
                  "\n***************************\n")
         gne (exec-all gs n limit par)]
     gne))
@@ -906,15 +777,15 @@
               " create (_gn:__Graph {uid: randomUUID()}) "
               " with * "
               " match (_g:`__Graph`)-[_p:prov]->(_gp) where _g.uid in " gss
-              " and not EXISTS {match (g1:`__Graph`)-[:read]->(e)<-[:delete]-(g2:`__Graph`) where g1.uid in " gss
-              "                 and g2.uid in " gss " and g1 <> g2 } "
-              " with * merge (_gn)-[:prov{rule:_p.rule + \"*\"}]->(_gp) "
-              " with distinct _g, _gn, _gp match (_g)-[:read]->(read) "
-              "                                create (_gn)-[:read]->(read)   "
+           ;   " and not EXISTS {match (g1:`__Graph`)-[:read]->(e)<-[:delete]-(g2:`__Graph`) where g1.uid in " gss
+           ;   "                 and g2.uid in " gss " and g1 <> g2 } "
+              " with * merge (_gn)-[:prov{rule:_p.rule + '*'}]->(_gp) "
+              " with distinct _g, _gn, _gp call { with _g, _gn match (_g)-[:read]->(read) "
+              "                                with distinct _gn, read create (_gn)-[:read]->(read)}   "
               " with  _g, _gn, _gp call { with _g, _gn match (_g)-[:delete]->(deleted) "
-              "                                create (_gn)-[:delete]->(deleted) return collect(ID(deleted)) as dels }"
+              "                                with distinct _gn, deleted create (_gn)-[:delete]->(deleted) return collect(ID(deleted)) as dels }"
               " with  _g, _gn, _gp, dels call {with _g, _gn  match (_g)-[:create]->(created) "
-              "                                create (_gn)-[:create]->(created) return collect(ID(created)) as creas }"
+              "                                with distinct _gn, created create (_gn)-[:create]->(created) return collect(ID(created)) as creas }"
               " with _g, _gn, _gp, dels, creas call { with _g detach delete _g }"
               " with _gn, _gp, collect(dels) as delss, collect(creas) as creass "
               " set _gn.active=apoc.coll.unionAll(apoc.coll.removeAll(_gp.active, "
@@ -934,6 +805,8 @@
 ;  (let [gns (search-and-derive g n par true)]
 ;    gns))
 
+
+
 (defn- exec*- [g n limit par]
   (let [gns (search-and-derive g n limit par)
         gnc (if (> (count gns) 1)
@@ -942,11 +815,13 @@
     gnc))
 
 
-(defn exec* [gs n par]
+
+
+(defn exec* [gs n limit par]
   (let [_ (debug println "\n\n***************************"
                  "\n**** EXECUTING RULE: " n " - parallel mode (*)"
                  "\n***************************\n")
-        res (map #(exec*- % n 0 par) gs)
+        res (map #(exec*- % n limit par) gs)
         gn (reduce concat res)
         gne (check-invariants gn)]
     (if (not (empty? gne))
@@ -1029,6 +904,13 @@ CALL {
                 with g OPTIONAL MATCH (g)-[:inve]->(e) detach delete e
    with g OPTIONAL MATCH (g)-[:inva]->(a) detach delete a,g }
 
+ ")
+  true)
+
+(defn deleteall []
+  (dbquery " call apoc.periodic.iterate ( \"MATCH (i) return i\",
+   \" detach delete i\" ,
+           {batchSize:1000, parallel:false})
  ")
   true)
 
@@ -1221,11 +1103,12 @@ CALL {
               r2)]
        ;(validate-rule s)
       (add-rule! n s)
-      (intern *ns* (symbol (str (name n))) (fn [g & par] (exec= g n par)))
-      (intern *ns* (symbol (str (name n) "<1")) (fn [g & par] (exec< g n 1 par)))
-      (intern *ns* (symbol (str (name n) "<n")) (fn [g l & par] (exec< g n l par)))
+      (intern *ns* (symbol (str (name n))) (fn [g & par] (exec= g n 0 par)))
+      (intern *ns* (symbol (str (name n) "<1")) (fn [g & par] (exec= g n 1 par)))
+      (intern *ns* (symbol (str (name n) "<n")) (fn [g l & par] (exec= g n l par)))
       (intern *ns* (symbol (str (name n) "#")) (fn [g & par] (exec g n par)))
-      (intern *ns* (symbol (str (name n) "*")) (fn [g & par] (exec* g n par)))
+      (intern *ns* (symbol (str (name n) "*")) (fn [g & par] (exec* g n 0 par)))
+      (intern *ns* (symbol (str (name n) "*<n")) (fn [g l & par] (exec* g n l par)))
       (intern *ns* (symbol (str (name n) "-dot")) (fn [] (rule->dot n s)))
       ((intern *ns* (symbol (str (name n) "-show")) (fn [] (show (rule->dot n s))))))))
 
@@ -1540,7 +1423,7 @@ CALL {
                     (map #(str (-> % first name) ": " (-> % second pr-str))))
         attrstr (apply str (interpose " | " attrs))]
     (str "\"" pref id "\" [shape=Mrecord penwidth=bold style=filled fillcolor=aliceblue label=\"{" handle ":" label
-         "(" id ")"
+       ;  "(" id ")"
          (if (not (empty? attrstr))
            (str " | " (str/escape attrstr {\" "'"}))
            "")
@@ -1654,7 +1537,7 @@ CALL {
                      with g0 create (gn:`__Graph`{uid:randomUUID()}) with g0,gn  
                      match (g0)<-[:prov*0..]-(g1:`__Graph`) 
                      with g0,g1,gn 
-                     create(g1g:Graph:`__Node`{uid:g1.uid, tag:g1.tag})<-[:create]-(gn) 
+                     create(g1g:Graph:`__Node`{uid:g1.uid, tag:g1.tag})<-[:create]-(gn)                          
                      with collect(distinct gn) as gnew 
                      call {with gnew with head(gnew) as gn 
                            match(gn)-[:create]->(g1g:Graph) 
@@ -1666,11 +1549,16 @@ CALL {
                           set e.src= ID(g2g), e.tar= ID(g1g),
                               e.step=steps
                                                 } 
+                     with * 
+                       call {with gnew with head(gnew) as gn
+                              match(gn)-[:create]->(el)
+                              with gn, collect(ID(el)) as elids
+                              set gn.active = elids}
                      with *
                      return head(gnew).uid as gn")]
     (map :gn (dbquery qstr))))
 
-(defn history [gs]
+(defn history-old [gs]
   (let [g (first gs)
         qstr (str "match(g:`__Graph`{uid:\"" g "\"})
                      -[:prov*0..]->(g0:`__Graph`) 
