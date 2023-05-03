@@ -610,7 +610,7 @@
                     (str " WITH * WHERE " conditionsStr " "))
                   
                   (if (> limit 0)
-                    (str " WITH distinct * LIMIT " limit " ")
+                    (str " WITH  * LIMIT " limit " ")
                     " "
                   ))
 
