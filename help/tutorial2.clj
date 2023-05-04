@@ -535,9 +535,6 @@
 ;; **
 
 ;; @@
-(debug! false)
-(deleteall)
-(trackreads! false)
 (def g0 (setup (newgrape)))
 (println "Gen 1") (time (step* g0))  (def g1 _)
 (println "Gen 2") (time (step* g1))  (def g2 _)
@@ -548,62 +545,44 @@
 (println "Gen 7") (time (step* g6))  (def g7 _)
 (println "Gen 8") (time (step* g7))   (def g8 _)
 (println "Gen 9") (time (step* g8))  (def g9 _)
-;(println "Gen 10") (time (step* g9))  (def g10 _)
-;(println "Gen 11") (time (step* g10))  (def g11 _)
+(println "Gen 10") (time (step* g9))  (def g10 _)
+(println "Gen 11") (time (step* g10))  (def g11 _)
+;(println "Gen 12") (time (step* g11))  (def g12 _)
 ;; @@
 ;; ->
 ;;; Gen 1
-;;; &quot;Elapsed time: 1340.003417 msecs&quot;
+;;; &quot;Elapsed time: 1089.595155 msecs&quot;
 ;;; Gen 2
-;;; &quot;Elapsed time: 139.826125 msecs&quot;
+;;; &quot;Elapsed time: 185.354291 msecs&quot;
 ;;; Gen 3
-;;; &quot;Elapsed time: 139.972 msecs&quot;
+;;; &quot;Elapsed time: 184.975057 msecs&quot;
 ;;; Gen 4
-;;; &quot;Elapsed time: 148.402667 msecs&quot;
+;;; &quot;Elapsed time: 191.562793 msecs&quot;
 ;;; Gen 5
-;;; &quot;Elapsed time: 176.562875 msecs&quot;
+;;; &quot;Elapsed time: 205.979052 msecs&quot;
 ;;; Gen 6
-;;; &quot;Elapsed time: 248.493042 msecs&quot;
+;;; &quot;Elapsed time: 269.905654 msecs&quot;
 ;;; Gen 7
-;;; &quot;Elapsed time: 645.787625 msecs&quot;
+;;; &quot;Elapsed time: 662.228346 msecs&quot;
 ;;; Gen 8
-;;; &quot;Elapsed time: 3494.291666 msecs&quot;
+;;; &quot;Elapsed time: 3235.8222 msecs&quot;
 ;;; Gen 9
-;;; &quot;Elapsed time: 32060.268417 msecs&quot;
-;;; 
-;; <-
-;; =>
-;;; {"type":"html","content":"<span class='clj-var'>#&#x27;tutorial2/g9</span>","value":"#'tutorial2/g9"}
-;; <=
-
-;; @@
-(println "Gen 10") (time (step* g9))  (def g10 _)
-;; @@
-;; ->
+;;; &quot;Elapsed time: 25409.922586 msecs&quot;
 ;;; Gen 10
-;;; &quot;Elapsed time: 165191.496833 msecs&quot;
+;;; &quot;Elapsed time: 133785.033364 msecs&quot;
+;;; Gen 11
+;;; &quot;Elapsed time: 1168065.283541 msecs&quot;
 ;;; 
 ;; <-
 ;; =>
-;;; {"type":"html","content":"<span class='clj-var'>#&#x27;tutorial2/g10</span>","value":"#'tutorial2/g10"}
+;;; {"type":"html","content":"<span class='clj-var'>#&#x27;tutorial2/g11</span>","value":"#'tutorial2/g11"}
 ;; <=
 
 ;; @@
-g10
+(commit g12 "g12")
 ;; @@
 ;; =>
-;;; {"type":"list-like","open":"<span class='clj-lazy-seq'>(</span>","close":"<span class='clj-lazy-seq'>)</span>","separator":" ","items":[{"type":"html","content":"<span class='clj-string'>&quot;b366c6c5-bc6a-40d0-bde1-fef934c6a6ee&quot;</span>","value":"\"b366c6c5-bc6a-40d0-bde1-fef934c6a6ee\""}],"value":"(\"b366c6c5-bc6a-40d0-bde1-fef934c6a6ee\")"}
-;; <=
-
-;; @@
-(println "Gen 12") (time (step* g11))  (def g12 _)
-;; @@
-;; ->
-;;; Gen 12
-;;; 
-;; <-
-;; =>
-;;; {"type":"html","content":"<span class='clj-nil'>nil</span>","value":"nil"}
+;;; {"type":"list-like","open":"<span class='clj-list'>(</span>","close":"<span class='clj-list'>)</span>","separator":" ","items":[{"type":"html","content":"<span class='clj-string'>&quot;7266f996-84b6-4f1d-aacc-677fa27d73ec&quot;</span>","value":"\"7266f996-84b6-4f1d-aacc-677fa27d73ec\""}],"value":"(\"7266f996-84b6-4f1d-aacc-677fa27d73ec\")"}
 ;; <=
 
 ;; **
@@ -611,18 +590,18 @@ g10
 ;; **
 
 ;; @@
-(list-plot '(0 1661 357 331 341 418 820 5150 8314 26487 243677 1581342) :joined true)
+(list-plot '([0 0] [1 1089] [2 185] [3 184] [4 192] [5 205] [6 269] [7 662] [8 3235] [9 25409] [10 133785] [11 1168065] [12 10768202]) :joined true)
 ;; @@
 ;; =>
-;;; {"type":"vega","content":{"width":400,"height":247.2188,"padding":{"top":10,"left":55,"bottom":40,"right":10},"data":[{"name":"f08943e2-0da3-4bf5-9f61-1656e45030b2","values":[{"x":0,"y":0},{"x":1,"y":1661},{"x":2,"y":357},{"x":3,"y":331},{"x":4,"y":341},{"x":5,"y":418},{"x":6,"y":820},{"x":7,"y":5150},{"x":8,"y":8314},{"x":9,"y":26487},{"x":10,"y":243677},{"x":11,"y":1581342}]}],"marks":[{"type":"line","from":{"data":"f08943e2-0da3-4bf5-9f61-1656e45030b2"},"properties":{"enter":{"x":{"scale":"x","field":"data.x"},"y":{"scale":"y","field":"data.y"},"stroke":{"value":"#FF29D2"},"strokeWidth":{"value":2},"strokeOpacity":{"value":1}}}}],"scales":[{"name":"x","type":"linear","range":"width","zero":false,"domain":{"data":"f08943e2-0da3-4bf5-9f61-1656e45030b2","field":"data.x"}},{"name":"y","type":"linear","range":"height","nice":true,"zero":false,"domain":{"data":"f08943e2-0da3-4bf5-9f61-1656e45030b2","field":"data.y"}}],"axes":[{"type":"x","scale":"x"},{"type":"y","scale":"y"}]},"value":"#gorilla_repl.vega.VegaView{:content {:width 400, :height 247.2188, :padding {:top 10, :left 55, :bottom 40, :right 10}, :data [{:name \"f08943e2-0da3-4bf5-9f61-1656e45030b2\", :values ({:x 0, :y 0} {:x 1, :y 1661} {:x 2, :y 357} {:x 3, :y 331} {:x 4, :y 341} {:x 5, :y 418} {:x 6, :y 820} {:x 7, :y 5150} {:x 8, :y 8314} {:x 9, :y 26487} {:x 10, :y 243677} {:x 11, :y 1581342})}], :marks [{:type \"line\", :from {:data \"f08943e2-0da3-4bf5-9f61-1656e45030b2\"}, :properties {:enter {:x {:scale \"x\", :field \"data.x\"}, :y {:scale \"y\", :field \"data.y\"}, :stroke {:value \"#FF29D2\"}, :strokeWidth {:value 2}, :strokeOpacity {:value 1}}}}], :scales [{:name \"x\", :type \"linear\", :range \"width\", :zero false, :domain {:data \"f08943e2-0da3-4bf5-9f61-1656e45030b2\", :field \"data.x\"}} {:name \"y\", :type \"linear\", :range \"height\", :nice true, :zero false, :domain {:data \"f08943e2-0da3-4bf5-9f61-1656e45030b2\", :field \"data.y\"}}], :axes [{:type \"x\", :scale \"x\"} {:type \"y\", :scale \"y\"}]}}"}
+;;; {"type":"vega","content":{"width":400,"height":247.2188,"padding":{"top":10,"left":55,"bottom":40,"right":10},"data":[{"name":"73c958fe-9cb7-4dcd-95cf-54c6d6360d02","values":[{"x":0,"y":0},{"x":1,"y":1089},{"x":2,"y":185},{"x":3,"y":184},{"x":4,"y":192},{"x":5,"y":205},{"x":6,"y":269},{"x":7,"y":662},{"x":8,"y":3235},{"x":9,"y":25409},{"x":10,"y":133785},{"x":11,"y":1168065},{"x":12,"y":10768202}]}],"marks":[{"type":"line","from":{"data":"73c958fe-9cb7-4dcd-95cf-54c6d6360d02"},"properties":{"enter":{"x":{"scale":"x","field":"data.x"},"y":{"scale":"y","field":"data.y"},"stroke":{"value":"#FF29D2"},"strokeWidth":{"value":2},"strokeOpacity":{"value":1}}}}],"scales":[{"name":"x","type":"linear","range":"width","zero":false,"domain":{"data":"73c958fe-9cb7-4dcd-95cf-54c6d6360d02","field":"data.x"}},{"name":"y","type":"linear","range":"height","nice":true,"zero":false,"domain":{"data":"73c958fe-9cb7-4dcd-95cf-54c6d6360d02","field":"data.y"}}],"axes":[{"type":"x","scale":"x"},{"type":"y","scale":"y"}]},"value":"#gorilla_repl.vega.VegaView{:content {:width 400, :height 247.2188, :padding {:top 10, :left 55, :bottom 40, :right 10}, :data [{:name \"73c958fe-9cb7-4dcd-95cf-54c6d6360d02\", :values ({:x 0, :y 0} {:x 1, :y 1089} {:x 2, :y 185} {:x 3, :y 184} {:x 4, :y 192} {:x 5, :y 205} {:x 6, :y 269} {:x 7, :y 662} {:x 8, :y 3235} {:x 9, :y 25409} {:x 10, :y 133785} {:x 11, :y 1168065} {:x 12, :y 10768202})}], :marks [{:type \"line\", :from {:data \"73c958fe-9cb7-4dcd-95cf-54c6d6360d02\"}, :properties {:enter {:x {:scale \"x\", :field \"data.x\"}, :y {:scale \"y\", :field \"data.y\"}, :stroke {:value \"#FF29D2\"}, :strokeWidth {:value 2}, :strokeOpacity {:value 1}}}}], :scales [{:name \"x\", :type \"linear\", :range \"width\", :zero false, :domain {:data \"73c958fe-9cb7-4dcd-95cf-54c6d6360d02\", :field \"data.x\"}} {:name \"y\", :type \"linear\", :range \"height\", :nice true, :zero false, :domain {:data \"73c958fe-9cb7-4dcd-95cf-54c6d6360d02\", :field \"data.y\"}}], :axes [{:type \"x\", :scale \"x\"} {:type \"y\", :scale \"y\"}]}}"}
 ;; <=
 
 ;; **
 ;;; Computing the 9th generation takes quite a bit longer than computing the 8th generation (close to 26 seconds on a Macbook Air). (Note: of course, the specific time depends on the machine this form is executed on.)
 ;;; 
-;;; However, not only the runtime grows, but also the required memory. Given that _GrapeVine_ executes transformations as _atomic_ ("all or nothing") transactions on a graph database, the database uses transient memory to compute query results prior to committing them to the database. This means that the amount of data provided to the Neo4J graph database limits the size of the graph transformations that can be applied "in one step". 
+;;; Computing the 11th generation took close to 100 minutes in the above experiment. The the rule application performs 59,049 transformations in parallel, generating 177,147 triangles.
 ;;; 
-;;; For example, at the time of writing this tutorial, we have provided the Neo4J database with 8G of memory (by using the `server.memory.heap.max_size=8G`) setting in the `neo4j.conf` file. As a result, the database will run out of memory when attempting to compute generation 10 using a single parallel graph transformation step. Calling the transformation below will attempt to transform the @@3^9=19,683@@ triangles of the 9th generation graph into 59,049 triangles of the 10th generation in a single-step transaction on the database. It fails due to insufficient memory, given the above configuration. 
+;;; 
 ;; **
 
 ;; **
@@ -643,18 +622,18 @@ g10
 ;; **
 ;;; ## Limited Rule Applications
 ;;; 
-;;; It may appear that we can solve the above issue by avoiding parallel rule applications on large graphs and using conventional (sequential) rule application (i.e., call the rule without the `*` suffix). However, this will also run into the memory limit, since _GrapeVine_ will generate _all_ possible rule applications, rather than just one.
+;;; As shown above, the application of rules that have a lot of matches in a given graph may take a longer time. It may appear that this is only the case for parallel rule applications. However, even conventional (sequential) rule application (i.e., call the rule without the `*` suffix) is impacted here. This is because _GrapeVine_ will generate _all_ possible derivations, rather than just a non-deterministically chosen one (like other graph transformation tools).
 ;;; 
-;;; Therefore, _GrapeVine_ provides a way to limit the number of matches in rule applications. The syntax for this operator appends a `<n` suffix to rule application call. The general form is `(rulecall<n g limit p1..px)`, where 
+;;; To avoid this issue, _GrapeVine_ provides a way to limit the number of matches in rule applications. The syntax for this operator appends a `<n` suffix to rule application call. The general form is `(rulecall<n g limit p1..px)`, where 
 ;;; 
 ;;; 1. `rulecall` is the name of a rule, optionally followed by an asterisk (`*`) for parallel application,
 ;;; 2. `g` is the input _grape_, and
 ;;; 3. `limit` is a positive number, specifying the maximum number of matches to be considered.
 ;;; 4. `p1..px` is (as always) an optional list of parameters for the rule
 ;;; 
-;;; For example, invoking `(step*<n g9 1000)` will limit the parallel application of rule `step` to 1000 matches.
+;;; For example, invoking `(step*<n g9 1000)` will limit the parallel application of rule `step` to at most 1000 matches. Similarly, a call to `(step<n g9 1000)` will produce at most 1000 derived graphs. For convenience, _GrapeVine_ also provides a shortcut form for limiting a rule application to a single match only. That form is  `(rulecall< g p1..px)`. For example, a call to `(step< g9)` will generate only one graph derivation (if there exists one). 
 ;;; 
-;;; The selection of matches in limited rule applications in **non-deterministic**. Therefore, a limit rule application is not a _function_ between _grapes_ but rather a _relation_. If we wanted to use limited rule application to overcome the memory limit problem faced when performing higher generations of Sierpinski triangles, we will need to distinguish between triangles to be transformed in the current generation and newly created ones (which are not to be transformed in the current generation). One way to do this is by adding a generation attribute `gen` triangles, which marks the generation they have been created in. The following  `setup` rule has been slightly modified to record that the initial triangle is of generation 0.   
+;;; The selection of matches in limited rule applications in **non-deterministic**. Therefore, a limit rule application is not a _function_ between _grapes_ but rather a _relation_. If we wanted to use limited rule application for generating Sierpinski triangles, we need to distinguish between triangles to be transformed in the current generation and newly created ones (which are not to be transformed in the current generation). One way to do this is by adding a generation attribute `gen` triangles, which marks the generation they have been created in. The following  `setup` rule has been slightly modified to record that the initial triangle is of generation 0.   
 ;; **
 
 ;; @@
@@ -714,9 +693,8 @@ g10
 ;;; 
 ;;; The above statement uses the _as-long-as-possible (alap)_ loop to execute the step rule in parallel with a limit to 1000 matches and on triangles of generation 9.
 ;;; 
-;;; The code below demonstrates that this approach indeed avoids the memory error experienced earlier. 
+;;; The code below demonstrates that this approach for several generations. 
 ;;; 
-;;; > Note: Of course, this depends on the specific machine configuration. If you are still running out of memory, you may need to lower the `limit`. If you have more memory, increasing the limit will improve performance.
 ;; **
 
 ;; @@
@@ -758,137 +736,6 @@ g10
 ;; <-
 ;; =>
 ;;; {"type":"html","content":"<span class='clj-var'>#&#x27;tutorial2/g9</span>","value":"#'tutorial2/g9"}
-;; <=
-
-;; @@
-(commit (first g9) "g9")
-;; @@
-;; =>
-;;; {"type":"html","content":"<span class='clj-string'>&quot;a22fcd9f-29ed-4e14-9bd3-9d1dd5c28c8e&quot;</span>","value":"\"a22fcd9f-29ed-4e14-9bd3-9d1dd5c28c8e\""}
-;; <=
-
-;; @@
-(rollback)
-;; @@
-;; ->
-;;; DBQuery:   call apoc.periodic.iterate ( &quot;MATCH (gt:`__Graph`)-[:prov*0..]-&gt;(gp:`__Graph`) 
-;;;    WHERE gt.tag IS NOT NULL  with collect(gp.uid) as transacted 
-;;;    with transacted 
-;;;             optional match (g:`__Graph`) -[:create]-&gt;(i) where not g.uid in transacted return i&quot;,
-;;;    &quot; detach delete i&quot; ,
-;;;            {batchSize:1000, parallel:false}) yield batches
-;;; CALL {
-;;;            MATCH (gt:`__Graph`)-[:prov*0..]-&gt;(gp:`__Graph`) 
-;;;    WHERE gt.tag IS NOT NULL  with collect(gp.uid) as transacted 
-;;;    with transacted 
-;;;              optional match (g:`__Graph`)where not g.uid in transacted 
-;;;                 with g OPTIONAL MATCH (g)-[:inve]-&gt;(e) detach delete e
-;;;    with g OPTIONAL MATCH (g)-[:inva]-&gt;(a) detach delete a,g }
-;;; 
-;;;  
-;;; ************* done 
-;;; 
-;;; 
-;; <-
-;; =>
-;;; {"type":"html","content":"<span class='clj-unkown'>true</span>","value":"true"}
-;; <=
-
-;; @@
-g9
-;; @@
-;; =>
-;;; {"type":"list-like","open":"<span class='clj-list'>(</span>","close":"<span class='clj-list'>)</span>","separator":" ","items":[{"type":"html","content":"<span class='clj-string'>&quot;242f7059-92fd-469d-a81e-8862aa19ac76&quot;</span>","value":"\"242f7059-92fd-469d-a81e-8862aa19ac76\""}],"value":"(\"242f7059-92fd-469d-a81e-8862aa19ac76\")"}
-;; <=
-
-;; @@
-(debug! false) (time (step*<n g9 4000 9))
-;; @@
-;; ->
-;;; &quot;Elapsed time: 132410.646375 msecs&quot;
-;;; 
-;; <-
-;; =>
-;;; {"type":"list-like","open":"<span class='clj-list'>(</span>","close":"<span class='clj-list'>)</span>","separator":" ","items":[{"type":"html","content":"<span class='clj-string'>&quot;ed5ae896-556f-4da1-abec-46adc056e275&quot;</span>","value":"\"ed5ae896-556f-4da1-abec-46adc056e275\""}],"value":"(\"ed5ae896-556f-4da1-abec-46adc056e275\")"}
-;; <=
-
-;; @@
-(time (step*<n _ 4000 9))
-;; @@
-;; ->
-;;; &quot;Elapsed time: 207853.294625 msecs&quot;
-;;; 
-;; <-
-;; =>
-;;; {"type":"list-like","open":"<span class='clj-list'>(</span>","close":"<span class='clj-list'>)</span>","separator":" ","items":[{"type":"html","content":"<span class='clj-string'>&quot;8acc1040-ff46-4617-9d8a-41ef5b053a6b&quot;</span>","value":"\"8acc1040-ff46-4617-9d8a-41ef5b053a6b\""}],"value":"(\"8acc1040-ff46-4617-9d8a-41ef5b053a6b\")"}
-;; <=
-
-;; @@
-(def g9s _)
-;; @@
-;; =>
-;;; {"type":"html","content":"<span class='clj-var'>#&#x27;tutorial2/g9s</span>","value":"#'tutorial2/g9s"}
-;; <=
-
-;; @@
-(rollback) (time (step*<n g9s 2000 9))
-;; @@
-;; ->
-;;; &quot;Elapsed time: 189945.084125 msecs&quot;
-;;; 
-;; <-
-;; =>
-;;; {"type":"list-like","open":"<span class='clj-list'>(</span>","close":"<span class='clj-list'>)</span>","separator":" ","items":[{"type":"html","content":"<span class='clj-string'>&quot;5131c117-425d-4d35-a073-f9ca9a42e336&quot;</span>","value":"\"5131c117-425d-4d35-a073-f9ca9a42e336\""}],"value":"(\"5131c117-425d-4d35-a073-f9ca9a42e336\")"}
-;; <=
-
-;; @@
-(uncommit "g9s") (commit (first g9s) "g9s")
-;; @@
-;; =>
-;;; {"type":"html","content":"<span class='clj-string'>&quot;44cc699e-e43d-455e-8295-b13c1f9cccc2&quot;</span>","value":"\"44cc699e-e43d-455e-8295-b13c1f9cccc2\""}
-;; <=
-
-;; @@
-(def g9s (grape "g9s"))
-;; @@
-;; =>
-;;; {"type":"html","content":"<span class='clj-var'>#&#x27;tutorial2/g9s</span>","value":"#'tutorial2/g9s"}
-;; <=
-
-;; @@
-(debug! true) (step*<n g9s 4000 9)
-;; @@
-;; ->
-;;; 
-;;; 
-;;; *************************** 
-;;; **** EXECUTING RULE:  step  - parallel mode (*) 
-;;; ***************************
-;;; 
-;;; *** SEARCH &amp; DERIVE 
-;;; DBQuery:  MATCH (_g:`__Graph` {uid:&quot;306796b9-b43e-455a-bda8-16729cee628c&quot;})  WITH *  match (c1:__Node:Corner)WHERE ID(c1) IN _g.active  WITH *  match (c2:__Node:Corner)WHERE ID(c2) IN _g.active  WITH *  match (c3:__Node:Corner)WHERE ID(c3) IN _g.active  WITH *  match (t1:__Node:Triangle {gen:9})WHERE ID(t1) IN _g.active  WITH *  match (t1)&lt;-[le_s:src]-(le:`__Edge`:left)-[le_t:tar]-&gt;(c1) WHERE ID(le) IN _g.active  WITH *  match (t1)&lt;-[re_s:src]-(re:`__Edge`:right)-[re_t:tar]-&gt;(c2) WHERE ID(re) IN _g.active  WITH *  match (t1)&lt;-[_kPNkDCRJqB_s:src]-(_kPNkDCRJqB:`__Edge`:top)-[_kPNkDCRJqB_t:tar]-&gt;(c3) WHERE ID(_kPNkDCRJqB) IN _g.active   WITH  * LIMIT 4000 with * CREATE (_gn:`__Graph`{uid: randomUUID()})-[:prov{rule:&quot;step&quot;}]-&gt;(_g)  WITH *  create (c1)&lt;-[:read{handle:&#x27;c1&#x27;}]-(_gn)  WITH *  create (c2)&lt;-[:read{handle:&#x27;c2&#x27;}]-(_gn)  WITH *  create (c3)&lt;-[:read{handle:&#x27;c3&#x27;}]-(_gn)  WITH *  create (t1)&lt;-[:read{handle:&#x27;t1&#x27;}]-(_gn)  WITH *  create (tl:Triangle:__Node {gen:9+1})&lt;-[:create{handle:&#x27;tl&#x27;}]-(_gn)    WITH *  create (tr:Triangle:__Node {gen:9+1})&lt;-[:create{handle:&#x27;tr&#x27;}]-(_gn)    WITH *  create (tt:Triangle:__Node {gen:9+1})&lt;-[:create{handle:&#x27;tt&#x27;}]-(_gn)    WITH *  create (l:Corner:__Node)&lt;-[:create{handle:&#x27;l&#x27;}]-(_gn)    WITH *  create (r:Corner:__Node)&lt;-[:create{handle:&#x27;r&#x27;}]-(_gn)    WITH *  create (b:Corner:__Node)&lt;-[:create{handle:&#x27;b&#x27;}]-(_gn)    WITH *  CREATE ( _ODpVsbRVRK :`__Edge`:left) &lt;-[:create{handle:&#x27;_ODpVsbRVRK&#x27;}]-(_gn) CREATE ( l )&lt;-[:tar]-(_ODpVsbRVRK) -[:src]-&gt;(tt )  WITH *  CREATE ( _MsemUNZLMv :`__Edge`:right) &lt;-[:create{handle:&#x27;_MsemUNZLMv&#x27;}]-(_gn) CREATE ( r )&lt;-[:tar]-(_MsemUNZLMv) -[:src]-&gt;(tt )  WITH *  CREATE ( _MAZQdDVJam :`__Edge`:top) &lt;-[:create{handle:&#x27;_MAZQdDVJam&#x27;}]-(_gn) CREATE ( c3 )&lt;-[:tar]-(_MAZQdDVJam) -[:src]-&gt;(tt )  WITH *  CREATE ( _jLtkxbSqQG :`__Edge`:top) &lt;-[:create{handle:&#x27;_jLtkxbSqQG&#x27;}]-(_gn) CREATE ( l )&lt;-[:tar]-(_jLtkxbSqQG) -[:src]-&gt;(tl )  WITH *  CREATE ( _mM_KGoxoEc :`__Edge`:left) &lt;-[:create{handle:&#x27;_mM_KGoxoEc&#x27;}]-(_gn) CREATE ( c1 )&lt;-[:tar]-(_mM_KGoxoEc) -[:src]-&gt;(tl )  WITH *  CREATE ( _RFXIeBqrwY :`__Edge`:right) &lt;-[:create{handle:&#x27;_RFXIeBqrwY&#x27;}]-(_gn) CREATE ( b )&lt;-[:tar]-(_RFXIeBqrwY) -[:src]-&gt;(tl )  WITH *  CREATE ( _RGkSIRLFEO :`__Edge`:top) &lt;-[:create{handle:&#x27;_RGkSIRLFEO&#x27;}]-(_gn) CREATE ( r )&lt;-[:tar]-(_RGkSIRLFEO) -[:src]-&gt;(tr )  WITH *  CREATE ( _bgtNimjYPj :`__Edge`:left) &lt;-[:create{handle:&#x27;_bgtNimjYPj&#x27;}]-(_gn) CREATE ( b )&lt;-[:tar]-(_bgtNimjYPj) -[:src]-&gt;(tr )  WITH *  CREATE ( _BinkBjoZdM :`__Edge`:right) &lt;-[:create{handle:&#x27;_BinkBjoZdM&#x27;}]-(_gn) CREATE ( c2 )&lt;-[:tar]-(_BinkBjoZdM) -[:src]-&gt;(tr )  WITH *  create (t1) &lt;-[:delete]-(_gn)  with * call { with _gn match(_gn)-[:delete]-&gt;(_nd:`__Node`)&lt;-[:tar]-(_e)  merge (_gn)-[:delete]-&gt;(_e) }  with * call { with _gn match(_gn)-[:delete]-&gt;(_nd:`__Node`)&lt;-[:src]-(_e)  merge (_gn)-[:delete]-&gt;(_e) }  with *  set _gn.active = apoc.coll.unionAll(apoc.coll.removeAll(_g.active,[ID(t1)]),[ID(tl),ID(tr),ID(tt),ID(l),ID(r),ID(b),ID(_ODpVsbRVRK),ID(_MsemUNZLMv),ID(_MAZQdDVJam),ID(_jLtkxbSqQG),ID(_mM_KGoxoEc),ID(_RFXIeBqrwY),ID(_RGkSIRLFEO),ID(_bgtNimjYPj),ID(_BinkBjoZdM)])   RETURN distinct _gn {.uid}
-;;; Caught exception: org.neo4j.driver.exceptions.TransientException: The allocation of an extra 2.0 MiB would use more than the limit 8.4 GiB. Currently using 8.4 GiB. dbms.memory.transaction.total.max threshold reached
-;;; ************* done 
-;;; 
-;;; *** CHECK INVARIANTS 
-;;; DBQuery:  MATCH (g:`__Graph`{uid:&quot;&quot;})-[:prov*0..]-&gt;(gs)  with gs optional match (gs)-[:_inve]-&gt;(inve)  with * optional match (gs)-[:_inva]-&gt;(inva)  return collect(inve.name) as enforced,  collect(inva.name) as asserted 
-;;; ************* done 
-;;; 
-;;; 
-;; <-
-;; =>
-;;; {"type":"list-like","open":"<span class='clj-lazy-seq'>(</span>","close":"<span class='clj-lazy-seq'>)</span>","separator":" ","items":[],"value":"()"}
-;; <=
-
-;; @@
-(debug! false) (time (-> (step*<n g9 2000 9) (step*<n 2000 9)))
-;; @@
-;; ->
-;;; &quot;Elapsed time: 135990.23475 msecs&quot;
-;;; 
-;; <-
-;; =>
-;;; {"type":"list-like","open":"<span class='clj-list'>(</span>","close":"<span class='clj-list'>)</span>","separator":" ","items":[{"type":"html","content":"<span class='clj-string'>&quot;9c31db92-7262-40c5-acd4-1d4f5f6416ec&quot;</span>","value":"\"9c31db92-7262-40c5-acd4-1d4f5f6416ec\""}],"value":"(\"9c31db92-7262-40c5-acd4-1d4f5f6416ec\")"}
 ;; <=
 
 ;; **

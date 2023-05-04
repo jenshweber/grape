@@ -1036,15 +1036,14 @@ CALL {
  ")
   true)
 
-(defn commit [g t]
-  (if (string? g)
-    (let [res (dbquery (str "MATCH (g:`__Graph`{uid:\"" g
+(defn commit [gs t]
+  (if (> (count gs) 1) (println "*** Warning: Commit called with grape that contains multiple graphs."))
+    (let [res (dbquery (str "MATCH (g:`__Graph`{uid:\"" (first gs)
                             "\"}) set g.tag=\"" t "\" return g"))
           id   (if (empty? res)
                  nil
                  (-> res first :g :uid))]
-      id)
-    (throw (Exception. "Commit can only be called on individual graphs."))))
+      (list id)))
 
 (defn uncommit [t]
   (let [res (dbquery (str "MATCH (g:`__Graph`{tag:\"" t
@@ -1971,5 +1970,6 @@ CALL {
                " with _gn set _gn._fp=apoc.hashing.fingerprint (_gn, ['uid']) ")]
     (dbquery qstr2)
     (list g)))
+
 
 
