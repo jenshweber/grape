@@ -950,11 +950,12 @@
       (set-grape! gne))
     gne))
 
-(defn- exec-query- [g n par]
+(defn- exec-query- [g n pars]
   (let [r ((queries) n)
         _  (debug println "*** exec query- ")
+        scope (zipmap (:params r) pars)
         nodesToRead (filter-elem 'node (-> r :read second :els))
-        nodesToReadStr (apply str (interpose " WITH * " (map #(readnode->cypher % par) nodesToRead)))
+        nodesToReadStr (apply str (interpose " WITH * " (map #(readnode->cypher % scope) nodesToRead)))
         edgesToRead (filter-elem 'edge (-> r :read second :els))
         edgesToReadStr (apply str (interpose " WITH * " (map readedge->cypher edgesToRead)))
         nodesToReturnStr (apply str (interpose "," (map readnodeRet->cypher nodesToRead)))
@@ -1544,7 +1545,7 @@ CALL {
                     (map #(str (-> % first name) ": " (-> % second pr-str))))
         attrstr (apply str (interpose " | " attrs))]
     (str "\"" pref id "\" [shape=Mrecord penwidth=bold style=filled fillcolor=aliceblue label=\"{" handle ":" label
-       ;  "(" id ")"
+         "(" id ")"
          (if (not (empty? attrstr))
            (str " | " (str/escape attrstr {\" "'"}))
            "")
