@@ -219,6 +219,7 @@
 (def rules-atom (atom {}))
 (def queries-atom (atom {}))
 (def constraints-atom (atom '{}))
+(def units-atom (atom {}))
 (def suppressed-atom (atom '()))
 
 (def debug-atom (atom false))
@@ -258,6 +259,9 @@
 (defn queries []
   (deref queries-atom))
 
+(defn units []
+  (deref units-atom))
+
 (defn constraints []
   (deref constraints-atom))
 
@@ -277,6 +281,9 @@
 
 (defn add-query! [n s]
   (swap! queries-atom (fn [c] (assoc c n s))))
+
+(defn add-unit! [n s]
+  (swap! units-atom (fn [c] (assoc c n s))))
 
 (defn add-constraint! [n s]
   (swap! constraints-atom (fn [c] (assoc c n s))))
@@ -1185,7 +1192,18 @@ CALL {
 (defn condition [c]
   ['cond c])
 
+(defn pre [& xs]
+  (let [
+    ;;_ (println "pre" xs)
+    ;;_ (println "args has length" (count xs))
+    ;;_ (println "xs is fn?" (ifn? xs))
+    ;;_ (println "xs contents is fn?" (map ifn? xs))
+   ]
+   {:pre xs}))
 
+(defn post [& xs] {:post xs})
+
+(defn prog [& xs] {:prog xs})
 
 (defn NAC
   "DSL form for specifying Negatic Applications Conditions (NACs)"
@@ -1221,7 +1239,8 @@ CALL {
                r)
           s (if (not (contains? prop :delete))
               (assoc r :delete [])
-              r2)]
+              r2)
+          _ (println s)]
        ;(validate-rule s)
       (add-rule! n s)
       (intern *ns* (symbol (str (name n))) (fn [g & par] (exec= g n 0 par)))
@@ -1243,9 +1262,87 @@ CALL {
         (list 'quote pars)
         (list 'apply 'merge (list 'quote (map eval args)))))
 
+;; (defn exec-unit-internal [graph ops]
+;;   (let [
+;;     curr (first ops)
+;;   ] (if 
+;;     (nil? curr) 
+;;     graph
+;;     )
+;;   ))
 
+(defn exec-unit-reducer [graph op]
+  (let [
+     _ (println "graph" graph)
+     _ (println "op" op (type op))
+     Fn (if (symbol? op)
+         (fn [g] (let [
+                       _ (println "Symbol!")
+                       ] ((eval op) g)))
+         (fn [g] (let [
+                       _ (println "Not Symbol!")
+                       f (first op)
+                       fe (eval f)
+                       args (map eval (rest op))
+                       _ (println fe args)
+                       ] (apply fe g args))))
+     _ (println "executing:" Fn)
+     result (Fn graph)   
+     _ (println result)   
+     ] result))
 
+(defn exec-unit [graph name params]
+  (let [
+    _ (println "exec-unit")
+    _ (println "name:" name)
+    _ (println "graph:" graph)
+    _ (println "params:" params)
+    spec (@units-atom name)
+    _ (println "unit-spec:" spec)
+    prog (first (spec :prog))
+    _ (println "unit-prog:" prog (type prog))
+  ] 
+  (reduce exec-unit-reducer graph prog)
+  )
+)
 
+;; (def L (list make-hello make-hello))
+;; ((apply comp L) (newgrape))
+;; (view _)
+
+(defn unit-os
+   "Helper function to create a GT unit"
+   [n params args]
+   (let [
+     _ (println "unit-os")
+     _ (println "name: " n)
+     _ (println "args: " (type args) args)
+     Fn (fn [g])
+   ] 
+   (add-unit! n args)
+   (intern *ns* (symbol (str (name n))) (fn [g & par] (exec-unit g n par)))
+   ))
+
+(defmacro unit [name params myProg]
+  (let [
+    ;;_ (println "name:" name)
+    ;;_ (println "params:" params)
+    ;;_ (println "myProg:" (type myProg) myProg)
+    ;;_ (println "first:" (type (first myProg)) (first myProg))
+    ;;_ (println "eval:" ((eval (first myProg)) (second myProg)))
+  ]
+   (list
+     'unit-os
+     (list 'quote name)
+     (list 'quote params)
+     (list 'quote ((eval (first myProg)) (rest myProg))))
+     )
+   )
+
+;;(def x '(prog (make-hello (newgrape))))
+;;(def n1 (first x))
+;;(def n2 (second x))
+;;((eval n1) n2)
 
 (defn query- [n params pat]
   "DSL form for specifying a graph query"
