@@ -1262,87 +1262,26 @@ CALL {
         (list 'quote pars)
         (list 'apply 'merge (list 'quote (map eval args)))))
 
-;; (defn exec-unit-internal [graph ops]
-;;   (let [
-;;     curr (first ops)
-;;   ] (if 
-;;     (nil? curr) 
-;;     graph
-;;     )
-;;   ))
-
-(defn exec-unit-reducer [graph op]
+(defn unit-os
+  "Helper function for defining a unit"
+  [n params spec]
   (let [
-     _ (println "graph" graph)
-     _ (println "op" op (type op))
-     Fn (if (symbol? op)
-         (fn [g] (let [
-                       _ (println "Symbol!")
-                       ] ((eval op) g)))
-         (fn [g] (let [
-                       _ (println "Not Symbol!")
-                       f (first op)
-                       fe (eval f)
-                       args (map eval (rest op))
-                       _ (println fe args)
-                       ] (apply fe g args))))
-     _ (println "executing:" Fn)
-     result (Fn graph)   
-     _ (println result)   
-     ] result))
-
-(defn exec-unit [graph name params]
-  (let [
-    _ (println "exec-unit")
-    _ (println "name:" name)
-    _ (println "graph:" graph)
-    _ (println "params:" params)
-    spec (@units-atom name)
-    _ (println "unit-spec:" spec)
-    prog (first (spec :prog))
-    _ (println "unit-prog:" prog (type prog))
-  ] 
-  (reduce exec-unit-reducer graph prog)
+    _ (println "unit-os name" n)
+    _ (println "unit-os spec" spec)
+    Fn (first (spec :prog))
+  ]  
+  (intern 
+    *ns* 
+    (symbol (str (name n))) 
+    (fn [g & par] (Fn g))) 
   )
 )
 
-;; (def L (list make-hello make-hello))
-;; ((apply comp L) (newgrape))
-;; (view _)
-
-(defn unit-os
-   "Helper function to create a GT unit"
-   [n params args]
-   (let [
-     _ (println "unit-os")
-     _ (println "name: " n)
-     _ (println "args: " (type args) args)
-     Fn (fn [g])
-   ] 
-   (add-unit! n args)
-   (intern *ns* (symbol (str (name n))) (fn [g & par] (exec-unit g n par)))
-   ))
-
-(defmacro unit [name params myProg]
-  (let [
-    ;;_ (println "name:" name)
-    ;;_ (println "params:" params)
-    ;;_ (println "myProg:" (type myProg) myProg)
-    ;;_ (println "first:" (type (first myProg)) (first myProg))
-    ;;_ (println "eval:" ((eval (first myProg)) (second myProg)))
-  ]
-   (list
-     'unit-os
-     (list 'quote name)
-     (list 'quote params)
-     (list 'quote ((eval (first myProg)) (rest myProg))))
-     )
-   )
-
-;;(def x '(prog (make-hello (newgrape))))
-;;(def n1 (first x))
-;;(def n2 (second x))
-;;((eval n1) n2)
+(defmacro unit [n pars & args]
+  (list 'unit-os
+        (list 'quote n)
+        (list 'quote pars)
+        (list 'apply 'merge (list 'quote (map eval args)))))
 
 (defn query- [n params pat]
   "DSL form for specifying a graph query"
