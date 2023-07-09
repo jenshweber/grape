@@ -1267,13 +1267,17 @@ CALL {
   [n params spec]
   (let [
     _ (println "unit-os name" n)
+    _ (println "unit-os params" params (type (first params)))
     _ (println "unit-os spec" spec)
-    Fn (first (spec :prog))
+    syms (map symbol params)
+    _ (println "unit-symbols" syms)
+    F1 (first (spec :prog))
+    F2 (fn [g & p] (F1 g))
   ]  
   (intern 
     *ns* 
     (symbol (str (name n))) 
-    (fn [g & par] (Fn g))) 
+    (fn [g & par] (F2 g par))) 
   )
 )
 
