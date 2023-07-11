@@ -1305,10 +1305,11 @@ CALL {
     Fn (list 'unit-os 
         (list 'quote n)
         (list 'quote params)
+        ;; (fn [__G a1 a2 ...] (-> __G p1 p2 p3 ... ))
         (list 
           'fn 
           (vec (concat (list '__G) params))
-          (concat (list '->) (list '__G) prog)))
+          (concat (list '->) (list '__G) pre prog))) ;; filter semantics
     _ (println Fn)
   ]
   Fn
