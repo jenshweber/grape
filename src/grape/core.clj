@@ -1269,15 +1269,11 @@ CALL {
     _ (println "unit-os name" n)
     _ (println "unit-os params" params (type (first params)))
     _ (println "unit-os spec" spec)
-    syms (map symbol params)
-    _ (println "unit-symbols" syms)
-    F1 (first (spec :prog))
-    F2 (fn [g & p] (F1 g))
   ]  
   (intern 
     *ns* 
     (symbol (str (name n))) 
-    (fn [g & par] (F2 g par))) 
+    spec) 
   )
 )
 
@@ -1306,11 +1302,13 @@ CALL {
     _ (println "pre:" pre)
     _ (println "prog:" prog)
     _ (println "post:" post)
-    ;; This works with parameters!
-    Fn (list 
+    Fn (list 'unit-os 
+        (list 'quote n)
+        (list 'quote params)
+        (list 
           'fn 
           (vec (concat (list '__G) params))
-          (concat (list '->) (list '__G) prog))
+          (concat (list '->) (list '__G) prog)))
     _ (println Fn)
   ]
   Fn
