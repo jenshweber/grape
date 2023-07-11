@@ -1203,7 +1203,7 @@ CALL {
 
 (defn post [& xs] {:post xs})
 
-(defn prog [& xs] {:prog xs})
+;;(defn prog [& xs] (let [X xs] X))
 
 (defn NAC
   "DSL form for specifying Negatic Applications Conditions (NACs)"
@@ -1281,11 +1281,41 @@ CALL {
   )
 )
 
-(defmacro unit [n pars & args]
-  (list 'unit-os
-        (list 'quote n)
-        (list 'quote pars)
-        (list 'apply 'merge (list 'quote (map eval args)))))
+(defn extract-clause [L sym] (rest (first (filter #(= (first %1) sym) L))))
+
+(defn replace-params [prog params start]
+  (let [
+        _ (println params (type (first params)))
+        syms (map 
+              #(read-string (str "%"(+ start %)))
+              (range (count params)))
+        ] 
+    	(clojure.walk/prewalk 
+         #(let [i (.indexOf params %1)
+                a (if (> i -1) (nth syms i) %1)
+                _ (println %1 i a)
+                ] a) 
+         prog)))
+
+(defmacro unit [n params & args] 
+  (let [
+    _ (println n params args)
+    pre (extract-clause args 'pre)
+    post (extract-clause args 'post)
+    prog (extract-clause args 'prog)
+    _ (println "pre:" pre)
+    _ (println "prog:" prog)
+    _ (println "post:" post)
+    ;; This works with parameters!
+    Fn (list 
+          'fn 
+          (vec (concat (list '__G) params))
+          (concat (list '->) (list '__G) prog))
+    _ (println Fn)
+  ]
+  Fn
+  ))
+
 
 (defn query- [n params pat]
   "DSL form for specifying a graph query"
