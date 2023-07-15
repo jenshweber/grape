@@ -1284,7 +1284,13 @@ CALL {
         (list 
           'fn 
           (vec (concat (list '__G) params))
-          (concat (list '->) (list '__G) pre prog post))) ;; filter semantics
+          (list 'if
+            (list 'every? 'true? (list (concat (list 'juxt) pre) '__G))
+            (concat (list '->) (list '__G) prog)
+            '__G  ;; identity case, when pre fails
+            )))
+          ;;(concat (list '->) (list '__G) pre prog post))) ;; filter semantics
+    _ (println Fn)
   ]
   Fn
   ))
