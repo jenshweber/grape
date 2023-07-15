@@ -1239,8 +1239,7 @@ CALL {
                r)
           s (if (not (contains? prop :delete))
               (assoc r :delete [])
-              r2)
-          _ (println s)]
+              r2)]
        ;(validate-rule s)
       (add-rule! n s)
       (intern *ns* (symbol (str (name n))) (fn [g & par] (exec= g n 0 par)))
@@ -1266,9 +1265,9 @@ CALL {
   "Helper function for defining a unit"
   [n params spec]
   (let [
-    _ (println "unit-os name" n)
-    _ (println "unit-os params" params (type (first params)))
-    _ (println "unit-os spec" spec)
+    ;;_ (println "unit-os name" n)
+    ;;_ (println "unit-os params" params)
+    ;;_ (println "unit-os spec" spec)
   ]  
   (intern 
     *ns* 
@@ -1281,27 +1280,23 @@ CALL {
 
 (defn replace-params [prog params start]
   (let [
-        _ (println params (type (first params)))
         syms (map 
               #(read-string (str "%"(+ start %)))
               (range (count params)))
         ] 
     	(clojure.walk/prewalk 
-         #(let [i (.indexOf params %1)
-                a (if (> i -1) (nth syms i) %1)
-                _ (println %1 i a)
-                ] a) 
+         #(let [i (.indexOf params %1)] (if (> i -1) (nth syms i) %1)) 
          prog)))
 
 (defmacro unit [n params & args] 
   (let [
-    _ (println n params args)
+    ;;_ (println n params args)
     pre (extract-clause args 'pre)
     post (extract-clause args 'post)
     prog (extract-clause args 'prog)
-    _ (println "pre:" pre)
-    _ (println "prog:" prog)
-    _ (println "post:" post)
+    ;;_ (println "pre:" pre)
+    ;;_ (println "prog:" prog)
+    ;;_ (println "post:" post)
     Fn (list 'unit-os 
         (list 'quote n)
         (list 'quote params)
@@ -1309,8 +1304,8 @@ CALL {
         (list 
           'fn 
           (vec (concat (list '__G) params))
-          (concat (list '->) (list '__G) pre prog))) ;; filter semantics
-    _ (println Fn)
+          (concat (list '->) (list '__G) pre prog post))) ;; filter semantics
+    ;; _ (println Fn)
   ]
   Fn
   ))
