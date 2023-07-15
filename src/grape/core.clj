@@ -1285,6 +1285,9 @@ CALL {
   Fn
   ))
 
+(defmacro exists [& conds] `#(> (count (-> %1 ~@conds)) 0))
+
+(defmacro forall [& conds] `#(= (count (-> %1 ~@conds)) (count %1)))
 
 (defn query- [n params pat]
   "DSL form for specifying a graph query"
