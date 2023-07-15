@@ -1269,7 +1269,11 @@ CALL {
          #(let [i (.indexOf params %1)] (if (> i -1) (nth syms i) %1)) 
          prog)))
 
-(defmacro unit [n params & args] 
+(defmacro unit 
+  "Makes a new graph transformation unit and stores the
+  name of the unit in the current namespace such that it
+  can be called like a Clojure function on an existing GRAPE."
+  [n params & args] 
   (let [
     pre (extract-clause args 'pre)
     post (extract-clause args 'post)
@@ -1285,9 +1289,21 @@ CALL {
   Fn
   ))
 
-(defmacro exists [& conds] `#(> (count (-> %1 ~@conds)) 0))
+(defmacro exists 
+  "Takes a list of graph constraints.
+   Produces a function takes a GRAPE returns true if there exists at least 
+   one graph in the GRAPE that satisfies the conjunction of all conditions; 
+   otherwise returns false."
+  [& conds] 
+  `#(> (count (-> %1 ~@conds)) 0))
 
-(defmacro forall [& conds] `#(= (count (-> %1 ~@conds)) (count %1)))
+(defmacro forall 
+  "Takes a list of graph constraints.
+  Produces a function that takes a GRAPE and returns true if all graphs
+  in the GRAPE satisfy the conjunciton of all conditions; otherwise 
+  returns false."
+  [& conds] 
+  `#(= (count (-> %1 ~@conds)) (count %1)))
 
 (defn query- [n params pat]
   "DSL form for specifying a graph query"
