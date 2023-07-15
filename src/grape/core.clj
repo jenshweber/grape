@@ -1192,19 +1192,6 @@ CALL {
 (defn condition [c]
   ['cond c])
 
-(defn pre [& xs]
-  (let [
-    ;;_ (println "pre" xs)
-    ;;_ (println "args has length" (count xs))
-    ;;_ (println "xs is fn?" (ifn? xs))
-    ;;_ (println "xs contents is fn?" (map ifn? xs))
-   ]
-   {:pre xs}))
-
-(defn post [& xs] {:post xs})
-
-;;(defn prog [& xs] (let [X xs] X))
-
 (defn NAC
   "DSL form for specifying Negatic Applications Conditions (NACs)"
   [& xs]
@@ -1264,16 +1251,10 @@ CALL {
 (defn unit-os
   "Helper function for defining a unit"
   [n params spec]
-  (let [
-    ;;_ (println "unit-os name" n)
-    ;;_ (println "unit-os params" params)
-    ;;_ (println "unit-os spec" spec)
-  ]  
   (intern 
     *ns* 
     (symbol (str (name n))) 
     spec) 
-  )
 )
 
 (defn extract-clause [L sym] (rest (first (filter #(= (first %1) sym) L))))
@@ -1290,22 +1271,16 @@ CALL {
 
 (defmacro unit [n params & args] 
   (let [
-    ;;_ (println n params args)
     pre (extract-clause args 'pre)
     post (extract-clause args 'post)
     prog (extract-clause args 'prog)
-    ;;_ (println "pre:" pre)
-    ;;_ (println "prog:" prog)
-    ;;_ (println "post:" post)
     Fn (list 'unit-os 
         (list 'quote n)
         (list 'quote params)
-        ;; (fn [__G a1 a2 ...] (-> __G p1 p2 p3 ... ))
         (list 
           'fn 
           (vec (concat (list '__G) params))
           (concat (list '->) (list '__G) pre prog post))) ;; filter semantics
-    ;; _ (println Fn)
   ]
   Fn
   ))
