@@ -1317,6 +1317,8 @@ CALL {
     pre (extract-clause args 'pre)
     post (extract-clause args 'post)
     prog (extract-clause args 'prog)
+    pre (if (> (count pre) 0) pre (list (list 'fn ['x] 'true)))
+    post (if (> (count post) 0) post (list (list 'fn ['x] 'true)))
     Fn (list 'unit-os 
         (list 'quote n)
         (list 'quote params)
@@ -1333,7 +1335,21 @@ CALL {
               (list 'every? 'true? (list (concat (list 'juxt) pre) '__G))
               (list 'do 
                 (list 'unit-pre-set 'true) 
-                (concat (list '->) (list '__G) prog))
+                (list 'let [
+                  '_ (list 'println "hello")
+                  '__ret (concat (list '->) (list '__G) prog)
+                  '__post-ret (list 'every? 'true? (list (concat (list 'juxt) post) '__ret))] 
+                  (list 'if '__post-ret
+                    ;; CASE: post condition passed
+                    (list 'do 
+                      (list 'unit-post-set 'true)
+                      '__ret)
+                    ;; CASE: post condition failed
+                    (list 'do
+                      (list 'unit-post-set 'false)
+                      (list 'if (list 'unit-should-fail?)
+                        (list 'throw (list 'AssertionError. (list 'str "Post-condition for unit " (list 'quote n) " failed!")))
+                        '__ret)))))
               (list 'do 
                 (list 'unit-pre-set 'false) 
                 (list 'if (list 'unit-should-fail?) 
@@ -1341,11 +1357,7 @@ CALL {
                   '__G)))))
               
               ;; CASE: unit condition checking disabled
-              (concat (list '->) (list '__G) prog))
-
-              )
-    _ (println Fn)
-  ]
+              (concat (list '->) (list '__G) prog)))]
   Fn
   ))
 
