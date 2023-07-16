@@ -220,6 +220,8 @@
 (def queries-atom (atom {}))
 (def constraints-atom (atom '{}))
 (def units-atom (atom {}))
+(def unit-result-atom (atom {:pre nil :post nil}))
+(def unit-failure-policy-atom (atom {:policy "SILENT"}))
 (def suppressed-atom (atom '()))
 
 (def debug-atom (atom false))
@@ -255,7 +257,6 @@
 (defn rules []
   (deref rules-atom))
 
-
 (defn queries []
   (deref queries-atom))
 
@@ -284,6 +285,35 @@
 
 (defn add-unit! [n s]
   (swap! units-atom (fn [c] (assoc c n s))))
+
+(defn unit-reset [] (fn [_] {:pre nil :post nil}))
+
+(defn unit-pre-set [result]
+  (swap! unit-result-atom (fn [c] (assoc c :pre result)))
+  )
+
+(defn unit-result? [] (deref unit-result-atom))
+
+(defn unit-pre? [] ((deref unit-result-atom) :pre))
+(defn unit-post? [] ((deref unit-result-atom) :post))
+
+(defn unit-post-set [result]
+  (swap! unit-result-atom (fn [c] (assoc c :post result)))
+  )
+
+(defn set-unit-failure-policy 
+  "Set the failure policy for unit pre- and post-conditions.
+  If set to SILENT, then unit execution proceeds, but flags
+  are set (access via unit-pre? and unit-post?).
+  If set to FAIL, then if pre- or post-conditions are violated,
+  an exception will be thrown.
+  Default behaviour is SILENT."
+  [policy]
+  (swap! unit-failure-policy-atom (fn [p] (assoc p :policy policy))))
+
+(defn unit-should-fail? [] (= 
+  ((deref unit-failure-policy-atom) :policy) 
+  "FAIL"))
 
 (defn add-constraint! [n s]
   (swap! constraints-atom (fn [c] (assoc c n s))))
@@ -1275,6 +1305,7 @@ CALL {
   can be called like a Clojure function on an existing GRAPE."
   [n params & args] 
   (let [
+    _ (println "unit-check-policy" (unit-should-fail?))
     pre (extract-clause args 'pre)
     post (extract-clause args 'post)
     prog (extract-clause args 'prog)
@@ -1284,11 +1315,20 @@ CALL {
         (list 
           'fn 
           (vec (concat (list '__G) params))
+          (list 'do
+          (list 'unit-reset)
           (list 'if
             (list 'every? 'true? (list (concat (list 'juxt) pre) '__G))
-            (concat (list '->) (list '__G) prog)
-            '__G  ;; identity case, when pre fails
-            )))
+            (list 'do 
+              (list 'unit-pre-set 'true) 
+              (concat (list '->) (list '__G) prog))
+            (list 'do 
+              (list 'unit-pre-set 'false) 
+              (list 'if 
+                (list 'unit-should-fail?) 
+                (list 'throw (list 'AssertionError. (list 'str "Pre-condition for unit " (list 'quote n) " failed!")))
+                '__G)) 
+            ))))
           ;;(concat (list '->) (list '__G) pre prog post))) ;; filter semantics
     _ (println Fn)
   ]
