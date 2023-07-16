@@ -221,6 +221,7 @@
 (def constraints-atom (atom '{}))
 (def units-atom (atom {}))
 (def unit-result-atom (atom {:pre nil :post nil}))
+(def unit-check-policy-atom (atom {:policy true}))
 (def unit-failure-policy-atom (atom {:policy "SILENT"}))
 (def suppressed-atom (atom '()))
 
@@ -289,17 +290,14 @@
 (defn unit-reset [] (fn [_] {:pre nil :post nil}))
 
 (defn unit-pre-set [result]
-  (swap! unit-result-atom (fn [c] (assoc c :pre result)))
-  )
-
-(defn unit-result? [] (deref unit-result-atom))
-
-(defn unit-pre? [] ((deref unit-result-atom) :pre))
-(defn unit-post? [] ((deref unit-result-atom) :post))
+  (swap! unit-result-atom (fn [c] (assoc c :pre result))))
 
 (defn unit-post-set [result]
-  (swap! unit-result-atom (fn [c] (assoc c :post result)))
-  )
+  (swap! unit-result-atom (fn [c] (assoc c :post result))))
+
+(defn unit-result? [] (deref unit-result-atom))
+(defn unit-pre? [] ((deref unit-result-atom) :pre))
+(defn unit-post? [] ((deref unit-result-atom) :post))
 
 (defn set-unit-failure-policy 
   "Set the failure policy for unit pre- and post-conditions.
@@ -311,9 +309,20 @@
   [policy]
   (swap! unit-failure-policy-atom (fn [p] (assoc p :policy policy))))
 
-(defn unit-should-fail? [] (= 
-  ((deref unit-failure-policy-atom) :policy) 
-  "FAIL"))
+(defn unit-should-fail? [] (= ((deref unit-failure-policy-atom) :policy) "FAIL"))
+
+(defn set-unit-check-policy
+  "Set the policy for checking pre- and post-conditions
+  for a unit. Setting to true will enable checking and setting
+  to false will disable checking. Disabling checking improves
+  performance. Checking is enabled by default. If a condition check
+  fails, then the unit failure policy is followed."
+  [policy] 
+  (do 
+    (unit-reset)
+    (swap! unit-check-policy-atom (fn [p] (assoc p :policy policy)))))
+
+(defn unit-should-check? [] ((deref unit-check-policy-atom) :policy))
 
 (defn add-constraint! [n s]
   (swap! constraints-atom (fn [c] (assoc c n s))))
@@ -1305,31 +1314,36 @@ CALL {
   can be called like a Clojure function on an existing GRAPE."
   [n params & args] 
   (let [
-    _ (println "unit-check-policy" (unit-should-fail?))
     pre (extract-clause args 'pre)
     post (extract-clause args 'post)
     prog (extract-clause args 'prog)
     Fn (list 'unit-os 
         (list 'quote n)
         (list 'quote params)
-        (list 
-          'fn 
+        (list 'fn 
+
           (vec (concat (list '__G) params))
-          (list 'do
-          (list 'unit-reset)
-          (list 'if
-            (list 'every? 'true? (list (concat (list 'juxt) pre) '__G))
-            (list 'do 
-              (list 'unit-pre-set 'true) 
+
+          (list 'if (list 'unit-should-check?)
+            
+            ;; CASE: unit condition checking enabled
+            (list 'do
+            (list 'unit-reset)
+            (list 'if
+              (list 'every? 'true? (list (concat (list 'juxt) pre) '__G))
+              (list 'do 
+                (list 'unit-pre-set 'true) 
+                (concat (list '->) (list '__G) prog))
+              (list 'do 
+                (list 'unit-pre-set 'false) 
+                (list 'if (list 'unit-should-fail?) 
+                  (list 'throw (list 'AssertionError. (list 'str "Pre-condition for unit " (list 'quote n) " failed!")))
+                  '__G)))))
+              
+              ;; CASE: unit condition checking disabled
               (concat (list '->) (list '__G) prog))
-            (list 'do 
-              (list 'unit-pre-set 'false) 
-              (list 'if 
-                (list 'unit-should-fail?) 
-                (list 'throw (list 'AssertionError. (list 'str "Pre-condition for unit " (list 'quote n) " failed!")))
-                '__G)) 
-            ))))
-          ;;(concat (list '->) (list '__G) pre prog post))) ;; filter semantics
+
+              )
     _ (println Fn)
   ]
   Fn
