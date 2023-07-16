@@ -1293,20 +1293,9 @@ CALL {
   (intern 
     *ns* 
     (symbol (str (name n))) 
-    spec) 
-)
+    spec))
 
 (defn extract-clause [L sym] (rest (first (filter #(= (first %1) sym) L))))
-
-(defn replace-params [prog params start]
-  (let [
-        syms (map 
-              #(read-string (str "%"(+ start %)))
-              (range (count params)))
-        ] 
-    	(clojure.walk/prewalk 
-         #(let [i (.indexOf params %1)] (if (> i -1) (nth syms i) %1)) 
-         prog)))
 
 (defmacro unit 
   "Makes a new graph transformation unit and stores the
@@ -1336,7 +1325,6 @@ CALL {
               (list 'do 
                 (list 'unit-pre-set 'true) 
                 (list 'let [
-                  '_ (list 'println "hello")
                   '__ret (concat (list '->) (list '__G) prog)
                   '__post-ret (list 'every? 'true? (list (concat (list 'juxt) post) '__ret))] 
                   (list 'if '__post-ret
@@ -1361,7 +1349,7 @@ CALL {
   Fn
   ))
 
-(defmacro exists 
+(defmacro exists? 
   "Takes a list of graph constraints.
    Produces a function takes a GRAPE returns true if there exists at least 
    one graph in the GRAPE that satisfies the conjunction of all conditions; 
@@ -1369,13 +1357,19 @@ CALL {
   [& conds] 
   `#(> (count (-> %1 ~@conds)) 0))
 
-(defmacro forall 
+(defmacro forall? 
   "Takes a list of graph constraints.
   Produces a function that takes a GRAPE and returns true if all graphs
   in the GRAPE satisfy the conjunciton of all conditions; otherwise 
   returns false."
   [& conds] 
   `#(= (count (-> %1 ~@conds)) (count %1)))
+
+(defmacro empty-grape?
+  "Produces a function that takes a GRAPE and returns true if the GRAPE
+  is empty and false otherwise."
+  [] 
+  `#(= (count %1) 0))
 
 (defn query- [n params pat]
   "DSL form for specifying a graph query"
