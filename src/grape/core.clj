@@ -1371,6 +1371,12 @@ CALL {
   [] 
   `#(= (count %1) 0))
 
+(defmacro empty-graph?
+  "Produces a function that takes a GRAPE and returns true if all graphs
+  in the GRAPE are the empty graph and false otherwise."
+  [] 
+  `#(> (count (-> %1 __has-node-)) 0))
+
 (defn query- [n params pat]
   "DSL form for specifying a graph query"
   (let [s {:read pat :params params}]
@@ -2096,4 +2102,11 @@ CALL {
     (list g)))
 
 
+;; =========================================
+;; Built-in rules and conditions that are used
+;; elsewhere in grape.core.
+;; =========================================
+
+;; used by empty-graph? to check if a graph is indeed empty.
+(constraint __has-node [] (node n))
 
