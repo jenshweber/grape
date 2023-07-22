@@ -319,8 +319,6 @@
   [policy]
   (swap! unit-policy-atom (fn [p] (assoc p :fail policy))))
 
-(defn unit-should-fail? [] (= ((deref unit-policy-atom) :fail) "FAIL"))
-
 (defn set-unit-check-policy
   "Set the policy for checking pre- and post-conditions
   for a unit. Setting to true will enable checking and setting
@@ -331,6 +329,11 @@
   (swap! unit-policy-atom (fn [p] (assoc p :check policy))))
 
 (defn unit-should-check? [] ((deref unit-policy-atom) :check))
+
+(defn unit-should-fail? [] 
+  (and 
+  (unit-should-check?)
+  (= ((deref unit-policy-atom) :fail) "FAIL")))
 
 (defn set-unit-stack-size [ss]
   (do
@@ -864,7 +867,7 @@
   (debug println "*** CHECK INVARIANTS ")
   (->
    (dbquery (str "MATCH (g:`__Graph`{uid:\"" (first g) "\"})-[:prov*0..]->(gs) "
-                 " with gs optional match (gs)-[:_inve]->(inve) "
+                 " with gs optional match (gs)-[_inve]->(inve) "
                  " with * optional match (gs)-[:_inva]->(inva) "
                  " return collect(inve.name) as enforced, "
                  " collect(inva.name) as asserted "))
@@ -1358,6 +1361,17 @@ CALL {
               (concat (list '->) (list '__G) prog)))]
   Fn
   ))
+
+(defn try-skip
+  "Attempt to execute unit u on GRAPE G.
+   If the unit's execution fails, then return the original GRAPE G. 
+   If the unit's execution succeeds, then return the new GRAPE. 
+   Unit failure is only detected if unit failure policy is set to FAIL;
+   otherwise, unit failures are ignored."
+  [G u]
+  (try (u G) (catch AssertionError _
+               (let [_ (println "failed!" G)]
+                 G))))
 
 (defmacro exists-graph? 
   "Takes a list of graph constraints.
