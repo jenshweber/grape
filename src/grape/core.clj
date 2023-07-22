@@ -1369,9 +1369,27 @@ CALL {
    Unit failure is only detected if unit failure policy is set to FAIL;
    otherwise, unit failures are ignored."
   [G u]
-  (try (u G) (catch AssertionError _
-               (let [_ (println "failed!" G)]
-                 G))))
+  (try (u G) (catch AssertionError _ G)))
+
+(defn try-empty
+  "Attempt to execute unit u on GRAPE G.
+   If the unit's execution fails, then returns an empty GRAPE (an empty list).
+   If the unit's execution succeeds, then return the resulting GRAPE.
+   Only works if unit failure policy is set to FAIL; otherwise failures
+   are ignored."
+  [G u]
+  (try (u G) (catch AssertionError _ ())))
+
+(defn try-resume
+  "Attempt to execute unit u on GRAPE G.
+   If the unit's execution fails, then disregard the failure
+   and return the result anyways."
+  [G u]
+  (let [og-policy ((deref unit-policy-atom) :fail)]
+    (set-unit-failure-policy "SILENT")
+    (let [G2 (u G)]
+      (set-unit-failure-policy og-policy)
+      G2)))
 
 (defmacro exists-graph? 
   "Takes a list of graph constraints.
