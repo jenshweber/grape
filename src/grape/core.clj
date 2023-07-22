@@ -219,10 +219,8 @@
 (def rules-atom (atom {}))
 (def queries-atom (atom {}))
 (def constraints-atom (atom '{}))
-(def units-atom (atom {}))
-(def unit-result-atom (atom {:pre nil :post nil}))
-(def unit-check-policy-atom (atom {:policy true}))
-(def unit-failure-policy-atom (atom {:policy "SILENT"}))
+(def unit-stack-atom (atom ()))
+(def unit-policy-atom (atom {:check true, :fail "SILENT", :stack-size 100}))
 (def suppressed-atom (atom '()))
 
 (def debug-atom (atom false))
@@ -254,15 +252,11 @@
 (defn trackreads? []
   (deref trackreads-atom))
 
-
 (defn rules []
   (deref rules-atom))
 
 (defn queries []
   (deref queries-atom))
-
-(defn units []
-  (deref units-atom))
 
 (defn constraints []
   (deref constraints-atom))
@@ -284,20 +278,36 @@
 (defn add-query! [n s]
   (swap! queries-atom (fn [c] (assoc c n s))))
 
-(defn add-unit! [n s]
-  (swap! units-atom (fn [c] (assoc c n s))))
+(defn add-empty-unit-frame [name]
+  (let [ss ((deref unit-policy-atom) :stack-size)
+        new-elem (list {:name name :pre nil :post nil})]
+    (swap! unit-stack-atom
+           (fn [S] (concat
+                    new-elem
+                    (if
+                     (>= (count S) ss)
+                      (butlast S) ;; drop off last element
+                      S))))))
 
-(defn unit-reset [] (fn [_] {:pre nil :post nil}))
+(defn unit-stack [] (deref unit-stack-atom))
+(defn unit-stack-reset[] (swap! unit-stack-atom (fn [_] ())))
+(defn last-unit [] (first (deref unit-stack-atom)))
 
-(defn unit-pre-set [result]
-  (swap! unit-result-atom (fn [c] (assoc c :pre result))))
+(defn pre? [] ((last-unit) :pre))
 
-(defn unit-post-set [result]
-  (swap! unit-result-atom (fn [c] (assoc c :post result))))
+(defn post? [] ((last-unit) :post))
 
-(defn unit-result? [] (deref unit-result-atom))
-(defn unit-pre? [] ((deref unit-result-atom) :pre))
-(defn unit-post? [] ((deref unit-result-atom) :post))
+(defn unit-set-pre [result]
+  (let [new-elem (list (assoc (last-unit) :pre result))]
+    (swap! unit-stack-atom
+           (fn [S] (concat new-elem (rest S))))))
+
+(defn unit-set-post [result]
+  (let [new-elem (list (assoc (last-unit) :post result))]
+    (swap! unit-stack-atom
+           (fn [S] (concat new-elem (rest S))))))
+
+(defn unit-policy? [] (deref unit-policy-atom))
 
 (defn set-unit-failure-policy 
   "Set the failure policy for unit pre- and post-conditions.
@@ -307,9 +317,9 @@
   an exception will be thrown.
   Default behaviour is SILENT."
   [policy]
-  (swap! unit-failure-policy-atom (fn [p] (assoc p :policy policy))))
+  (swap! unit-policy-atom (fn [p] (assoc p :fail policy))))
 
-(defn unit-should-fail? [] (= ((deref unit-failure-policy-atom) :policy) "FAIL"))
+(defn unit-should-fail? [] (= ((deref unit-policy-atom) :fail) "FAIL"))
 
 (defn set-unit-check-policy
   "Set the policy for checking pre- and post-conditions
@@ -317,12 +327,15 @@
   to false will disable checking. Disabling checking improves
   performance. Checking is enabled by default. If a condition check
   fails, then the unit failure policy is followed."
-  [policy] 
-  (do 
-    (unit-reset)
-    (swap! unit-check-policy-atom (fn [p] (assoc p :policy policy)))))
+  [policy]
+  (swap! unit-policy-atom (fn [p] (assoc p :check policy))))
 
-(defn unit-should-check? [] ((deref unit-check-policy-atom) :policy))
+(defn unit-should-check? [] ((deref unit-policy-atom) :check))
+
+(defn set-unit-stack-size [ss]
+  (do
+    (swap! unit-stack-atom (fn [S] (take ss S)))
+    (swap! unit-policy-atom (fn [P] (assoc P :stack-size ss)))))
 
 (defn add-constraint! [n s]
   (swap! constraints-atom (fn [c] (assoc c n s))))
@@ -350,9 +363,6 @@
 (dbquery "CREATE CONSTRAINT IF NOT EXISTS FOR (g:__Graph) REQUIRE g.tag IS UNIQUE")
 (dbquery "create index if not exists for  (g:__Graph) on g._fp")
 (dbquery "create index if not exists for  (g:Graph) on g.uid")
-
-
-
 
 ; ---------------------------------------------------
 ; DSL
@@ -1319,27 +1329,27 @@ CALL {
             
             ;; CASE: unit condition checking enabled
             (list 'do
-            (list 'unit-reset)
+            (list 'add-empty-unit-frame (list 'quote n))
             (list 'if
               (list 'every? 'true? (list (concat (list 'juxt) pre) '__G))
               (list 'do 
-                (list 'unit-pre-set 'true) 
+                (list 'unit-set-pre 'true) 
                 (list 'let [
                   '__ret (concat (list '->) (list '__G) prog)
                   '__post-ret (list 'every? 'true? (list (concat (list 'juxt) post) '__ret))] 
                   (list 'if '__post-ret
                     ;; CASE: post condition passed
                     (list 'do 
-                      (list 'unit-post-set 'true)
+                      (list 'unit-set-post 'true)
                       '__ret)
                     ;; CASE: post condition failed
                     (list 'do
-                      (list 'unit-post-set 'false)
+                      (list 'unit-set-post 'false)
                       (list 'if (list 'unit-should-fail?)
                         (list 'throw (list 'AssertionError. (list 'str "Post-condition for unit " (list 'quote n) " failed!")))
                         '__ret)))))
               (list 'do 
-                (list 'unit-pre-set 'false) 
+                (list 'unit-set-pre 'false) 
                 (list 'if (list 'unit-should-fail?) 
                   (list 'throw (list 'AssertionError. (list 'str "Pre-condition for unit " (list 'quote n) " failed!")))
                   '__G)))))
@@ -1349,7 +1359,7 @@ CALL {
   Fn
   ))
 
-(defmacro exists? 
+(defmacro exists-graph? 
   "Takes a list of graph constraints.
    Produces a function takes a GRAPE returns true if there exists at least 
    one graph in the GRAPE that satisfies the conjunction of all conditions; 
@@ -1357,7 +1367,7 @@ CALL {
   [& conds] 
   `#(> (count (-> %1 ~@conds)) 0))
 
-(defmacro forall? 
+(defmacro forall-graphs? 
   "Takes a list of graph constraints.
   Produces a function that takes a GRAPE and returns true if all graphs
   in the GRAPE satisfy the conjunciton of all conditions; otherwise 
