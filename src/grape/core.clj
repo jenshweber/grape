@@ -1391,6 +1391,16 @@ CALL {
       (set-unit-failure-policy og-policy)
       G2)))
 
+(defn try-else
+  "Attempt to execute unit tryit on GRAPE G.
+   If the unit's execution fails, then execute the unit elseit.
+   If the unit's execution succeeds, then return that result.
+   Only works if unit failure policy is set to FAIL."
+  [G tryit elseit]
+  (try 
+    (tryit G)
+    (catch AssertionError _ (elseit G))))
+
 (defmacro exists-graph? 
   "Takes a list of graph constraints.
    Produces a function takes a GRAPE returns true if there exists at least 
