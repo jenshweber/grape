@@ -1433,11 +1433,13 @@ CALL {
                        ;; GIVEN ANON FUNCTION A LOCAL NAME
                        '__exec-rule
 
-                       ;; OVERLOAD FUNCTION with PARENT CALL LIST
+                       ;; OVERLOAD with HISTORY
                        (list
 
+                        ;; ARGUMENTS to FUNCTION
                         (vec (concat (list '__G) params (list 'history)))
 
+                        ;; FUNCITON BODY
                         (list 'if (list 'unit-should-check?)
 
                               ;; CASE: unit condition checking enabled
@@ -1464,6 +1466,7 @@ CALL {
                              ;; CASE: unit condition checking disabled
                               (concat (list '->) (list '__G) prog)))
 
+                       ;; OVERLOAD without HISTORY
                        (list
                         (vec (concat (list '__G) params))
                         (concat (list '__exec-rule) (list '__G) params (list '())))))]
