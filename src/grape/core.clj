@@ -280,14 +280,14 @@
 
 (defn generate-stack-uuid [] (str "stack-" (.toString (java.util.UUID/randomUUID))))
 
-(defn unit-stack-get-internal [trace stack]
+(defn _unit-stack-get [trace stack]
   (if (= 1 (count trace))
     ;; BASE CASE 
     (stack (first trace))
     ;; RECURSIVE CASE
-    (unit-stack-get-internal (rest trace) ((stack (first trace)) :stack))))
+    (_unit-stack-get (rest trace) ((stack (first trace)) :stack))))
 
-(defn unit-stack-put-internal [trace value stack]
+(defn _unit-stack-put [trace value stack]
 
   (if (= 1 (count trace))
 
@@ -297,73 +297,125 @@
     ;; RECURSIVE CASE
     (let [key (first trace)
           obj (stack key)
-          updated (unit-stack-put-internal (rest trace) value (obj :stack))
+          updated (_unit-stack-put (rest trace) value (obj :stack))
           obj (assoc obj :stack updated)]
       (assoc stack key obj))))
 
 (defn unit-stack-put [trace value]
-       (swap! unit-stack-atom (fn [S] (unit-stack-put-internal trace value S))))
+       (swap! unit-stack-atom (fn [S] (_unit-stack-put trace value S))))
 
-(defn unit-stack-get [trace]
-       (swap! unit-stack-atom (fn [S] (unit-stack-get-internal trace S))))
+(defn unit-stack-get
+  "Get a stack frame from the unit execution stack by performing
+   a depth first traverse of the stack frame according to the UUIDs
+   provided in the trace."
+  [trace]
+  (_unit-stack-get trace (deref unit-stack-atom)))
 
-(defn get-unit-stack-max-size []
+(defn get-unit-stack-max-size
+  "Returns the current maximum unit execution stack size.
+   When the stack grows larger than this, the oldest frames
+   are pruned/dropped off."
+  []
   ((deref unit-policy-atom) :stack-size))
 
-(defn get-unit-stack-curr-size []
+(defn get-unit-stack-curr-size
+  "Returns the current size of the unit stack. The size is
+   the number of 'top-level' execution frames, disregarding
+   the depth of each frame's own stack trace."
+  []
   (count (deref unit-stack-atom)))
 
-(defn prune-unit-stack [n]
-  (swap! unit-stack-atom (fn [S] (into {} (take-last n S)))))
+(defn prune-unit-stack
+  "Removes the n oldest elements from unit execution stack."
+  [n]
+  (swap! unit-stack-atom
+         (fn [S]
+           (let [new-size (- (count S) n)]
+             (if (< new-size 1)
+               (throw (AssertionError. "Cannot prune stack to have size less than 1"))
+               (into {} (take-last new-size S)))))))
 
-(defn set-unit-stack-max-size [ss]
-  (do
-    (prune-unit-stack ss)
+(defn set-unit-stack-max-size
+  "Set the maximum execution stack size for the unit execution stack.
+   Removes older execution stack frames, if the new size is smaller than stack's current size.
+   The size corresponds to the 'top-level' of the stack, not the depth of each stack trace.
+   Stack trace depths are unbounded in size."
+  [ss]
+  (let [curr (get-unit-stack-curr-size)]
+    (when (< ss curr) (prune-unit-stack (- curr ss)))
     (swap! unit-policy-atom (fn [P] (assoc P :stack-size ss)))))
-
-
 
 (defn add-unit-frame
   "
   Adds a new unit execution frame to the unit stack and
   returns a unique identifier (uuid) for that new frame
-  corresponding to this unit's execution.
-  "
+  corresponding to this unit's execution. The name of the
+  unit is stored as part of the frame.
+   
+  If a trace is provided, then the new frame is added
+  as a child of stack frame that is found by performing
+  a depth first traverse of the stack traces according
+  to the UUID's in the trace list. The first element of
+  the trace list correpsonds to the top-most level of the
+  stack.
+   
+  If no trace is provided, then execution frame is added
+  to the top-level of the stack.
+  " 
   ([name trace]
    (let [limit (get-unit-stack-max-size)
          curr (get-unit-stack-curr-size)
          id (generate-stack-uuid)
          new-elem {:name name :pre nil :post nil :stack {}}
          new-trace (concat trace (list id))]
-     (if (= limit curr) 
-       (do (prune-unit-stack (- limit 1)) (unit-stack-put new-trace new-elem))
-       (unit-stack-put new-trace new-elem)) 
+     (when (= limit curr) (prune-unit-stack 1))
+     (unit-stack-put new-trace new-elem)
      id))
 
   ;; OVERLOAD for top-level units
   ([name] (add-unit-frame name '())))
 
-(defn unit-stack [] (deref unit-stack-atom))
-(defn reset-unit-stack[] (swap! unit-stack-atom (fn [_] {})))
+(defn unit-stack "Returns the current unit execution stack." [] (deref unit-stack-atom))
+
+(defn reset-unit-stack
+  "Resets the unit execution stack to be empty."
+  [] (swap! unit-stack-atom (fn [_] {})))
+
 (defn last-unit [] (last (deref unit-stack-atom)))
 
-(defn pre? [] ((second (last-unit)) :pre))
+(defn pre?
+  "Returns the pre-condition value for the most recent 
+   top-level frame on unit execution stack."
+  [] ((second (last-unit)) :pre))
 
-(defn post? [] ((last-unit) :post))
+(defn post? 
+  "Returns the post-condition value for the most recent 
+   top-level frame on unit execution stack." 
+  [] ((last-unit) :post))
 
-(defn set-unit-pre [result trace]
-    (swap! unit-stack-atom (fn [S] 
-                             (let [old-elem (unit-stack-get-internal trace S) 
-                                   new-elem (assoc old-elem :pre result)]
-                               (unit-stack-put-internal trace new-elem S)))))
+(defn set-unit-pre
+  "Set the pre-condition value for the stack frame identified by the trace."
+  [result trace]
+  (swap!
+   unit-stack-atom
+   (fn [S]
+     (let [old-elem (_unit-stack-get trace S)
+           new-elem (assoc old-elem :pre result)]
+       (_unit-stack-put trace new-elem S)))))
 
-(defn set-unit-post [result trace]
-  (swap! unit-stack-atom (fn [S]
-                           (let [old-elem (unit-stack-get-internal trace S)
-                                 new-elem (assoc old-elem :post result)]
-                             (unit-stack-put-internal trace new-elem S)))))
+(defn set-unit-post
+   "Set the post-condition value for the stack frame identified by the trace."
+  [result trace] 
+  (swap!
+   unit-stack-atom
+   (fn [S]
+     (let [old-elem (_unit-stack-get trace S)
+           new-elem (assoc old-elem :post result)]
+       (_unit-stack-put trace new-elem S)))))
 
-(defn unit-policy? [] (deref unit-policy-atom))
+(defn unit-policy 
+  "Returns the details of current unit execution policy."
+  [] (deref unit-policy-atom))
 
 (defn set-unit-failure-policy 
   "Set the failure policy for unit pre- and post-conditions.
@@ -390,8 +442,6 @@
   (and 
   (unit-should-check?)
   (= ((deref unit-policy-atom) :fail) "FAIL")))
-
-
 
 (defn add-constraint! [n s]
   (swap! constraints-atom (fn [c] (assoc c n s))))
@@ -1388,26 +1438,17 @@ CALL {
 
                         (vec (concat (list '__G) params (list 'history)))
 
-                        (list 'println "exec-unit" (list 'quote n) "overload with params & history" params 'history) ;; TODO - DELETE
-                        
                         (list 'if (list 'unit-should-check?)
 
                               ;; CASE: unit condition checking enabled
                               (list 'let
-                                    [
-                                     'x (list 'println "history is" (list 'type 'history) 'history)
-                                     '__pre-ret (list 'every? 'true? (list (concat (list 'juxt) pre) '__G))
+                                    ['__pre-ret (list 'every? 'true? (list (concat (list 'juxt) pre) '__G))
                                      'frame (list 'add-unit-frame (list 'quote n) 'history)
-                                     'x (list 'println "new frame is" 'frame)
-                                     'history (list 'concat 'history (list 'list 'frame)) 
-                                     'x (list 'println "new is history" 'history)
-                                     ]
+                                     'history (list 'concat 'history (list 'list 'frame))]
                                     (list 'set-unit-pre '__pre-ret 'history)
                                     (list 'if '__pre-ret
-                                          (list 'let [
-                                                      'x (list 'println "prog with history" (list 'quote newprog))
-                                                      '__ret (concat (list '->) (list '__G) newprog)
-                                                      '__post-ret (list 'every? 'true? (list (concat (list 'juxt) post) '__ret))] 
+                                          (list 'let ['__ret (concat (list '->) (list '__G) newprog)
+                                                      '__post-ret (list 'every? 'true? (list (concat (list 'juxt) post) '__ret))]
                                                 (list 'set-unit-post '__post-ret 'history)
                                                 (list 'if '__post-ret
                                                      ;; CASE: post condition passed
@@ -1425,9 +1466,7 @@ CALL {
 
                        (list
                         (vec (concat (list '__G) params))
-                        (list 'println "exec-unit overload without history" '__G params) ;; TODO - DELETE 
-                        (concat (list '__exec-rule) (list '__G) params (list '()))
-                        )))]
+                        (concat (list '__exec-rule) (list '__G) params (list '())))))]
     Fn))
 
 (defn try-skip
@@ -1468,26 +1507,6 @@ CALL {
   (try 
     (tryit G)
     (catch AssertionError _ (elseit G))))
-
-;; (defn try-else-2
-;;   [G tryit & elses]
-;;   (let [
-;;         _ (println "trying" tryit "with elses" (count elses) elses)
-;;   ]
-;;     (try
-;;       (tryit G)
-;;       (catch AssertionError _
-;;         (if (> (count elses) 1)
-;;           (let [
-;;                 _ (print "failed! recurse ")
-;;                 next-tryit (first elses)
-;;                 therest (rest elses)
-;;                 _ (println "with:" next-tryit therest)]
-;;             (apply try-else-2 G next-tryit therest)
-;;           ((first elses) G)))))))
-
-(defn try-else-2 
-  [G tryit & elses])
 
 (defmacro exists-graph? 
   "Takes a list of graph constraints.
