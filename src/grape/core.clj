@@ -278,31 +278,41 @@
 (defn add-query! [n s]
   (swap! queries-atom (fn [c] (assoc c n s))))
 
-(defn add-empty-unit-frame [name]
+(defn generate-uuid [] (.toString (java.util.UUID/randomUUID)))
+
+(defn add-unit-frame
+  "
+  Adds a new unit execution frame to the unit stack and
+  returns a unique identifier (uuid) for that new frame
+  corresponding to this unit's execution.
+  "
+  [name]
   (let [ss ((deref unit-policy-atom) :stack-size)
-        new-elem (list {:name name :pre nil :post nil})]
+        id (generate-uuid)
+        new-elem (list {:name name :pre nil :post nil :id id})]
     (swap! unit-stack-atom
            (fn [S] (concat
                     new-elem
                     (if
                      (>= (count S) ss)
                       (butlast S) ;; drop off last element
-                      S))))))
+                      S))))
+    id))
 
 (defn unit-stack [] (deref unit-stack-atom))
-(defn unit-stack-reset[] (swap! unit-stack-atom (fn [_] ())))
+(defn reset-unit-stack[] (swap! unit-stack-atom (fn [_] ())))
 (defn last-unit [] (first (deref unit-stack-atom)))
 
 (defn pre? [] ((last-unit) :pre))
 
 (defn post? [] ((last-unit) :post))
 
-(defn unit-set-pre [result]
+(defn set-unit-pre [result]
   (let [new-elem (list (assoc (last-unit) :pre result))]
     (swap! unit-stack-atom
            (fn [S] (concat new-elem (rest S))))))
 
-(defn unit-set-post [result]
+(defn set-unit-post [result]
   (let [new-elem (list (assoc (last-unit) :post result))]
     (swap! unit-stack-atom
            (fn [S] (concat new-elem (rest S))))))
@@ -1310,57 +1320,49 @@ CALL {
 
 (defn extract-clause [L sym] (rest (first (filter #(= (first %1) sym) L))))
 
-(defmacro unit 
+(defmacro unit
   "Makes a new graph transformation unit and stores the
   name of the unit in the current namespace such that it
   can be called like a Clojure function on an existing GRAPE."
-  [n params & args] 
-  (let [
-    pre (extract-clause args 'pre)
-    post (extract-clause args 'post)
-    prog (extract-clause args 'prog)
-    pre (if (> (count pre) 0) pre (list (list 'fn ['x] 'true)))
-    post (if (> (count post) 0) post (list (list 'fn ['x] 'true)))
-    Fn (list 'unit-os 
-        (list 'quote n)
-        (list 'quote params)
-        (list 'fn 
+  [n params & args]
+  (let [pre (extract-clause args 'pre)
+        post (extract-clause args 'post)
+        prog (extract-clause args 'prog)
+        pre (if (> (count pre) 0) pre (list (list 'fn ['x] 'true)))
+        post (if (> (count post) 0) post (list (list 'fn ['x] 'true)))
+        Fn (list 'unit-os
+                 (list 'quote n)
+                 (list 'quote params)
+                 (list 'fn
 
-          (vec (concat (list '__G) params))
+                       (vec (concat (list '__G) params))
 
-          (list 'if (list 'unit-should-check?)
-            
-            ;; CASE: unit condition checking enabled
-            (list 'do
-            (list 'add-empty-unit-frame (list 'quote n))
-            (list 'if
-              (list 'every? 'true? (list (concat (list 'juxt) pre) '__G))
-              (list 'do 
-                (list 'unit-set-pre 'true) 
-                (list 'let [
-                  '__ret (concat (list '->) (list '__G) prog)
-                  '__post-ret (list 'every? 'true? (list (concat (list 'juxt) post) '__ret))] 
-                  (list 'if '__post-ret
-                    ;; CASE: post condition passed
-                    (list 'do 
-                      (list 'unit-set-post 'true)
-                      '__ret)
-                    ;; CASE: post condition failed
-                    (list 'do
-                      (list 'unit-set-post 'false)
-                      (list 'if (list 'unit-should-fail?)
-                        (list 'throw (list 'AssertionError. (list 'str "Post-condition for unit " (list 'quote n) " failed!")))
-                        '__ret)))))
-              (list 'do 
-                (list 'unit-set-pre 'false) 
-                (list 'if (list 'unit-should-fail?) 
-                  (list 'throw (list 'AssertionError. (list 'str "Pre-condition for unit " (list 'quote n) " failed!")))
-                  '__G)))))
-              
-              ;; CASE: unit condition checking disabled
-              (concat (list '->) (list '__G) prog)))]
-  Fn
-  ))
+                       (list 'if (list 'unit-should-check?)
+
+                              ;; CASE: unit condition checking enabled
+                             (list 'let
+                                   ['__pre-ret (list 'every? 'true? (list (concat (list 'juxt) pre) '__G))]
+                                   (list 'add-unit-frame (list 'quote n))
+                                   (list 'set-unit-pre '__pre-ret)
+                                   (list 'if '__pre-ret
+                                         (list 'let ['__ret (concat (list '->) (list '__G) prog)
+                                                     '__post-ret (list 'every? 'true? (list (concat (list 'juxt) post) '__ret))]
+                                               (list 'set-unit-pre '__pre-ret)
+                                               (list 'set-unit-post '__post-ret)
+                                               (list 'if '__post-ret
+                                                     ;; CASE: post condition passed
+                                                     '__ret
+                                                     ;; CASE: post condition failed
+                                                     (list 'if (list 'unit-should-fail?)
+                                                           (list 'throw (list 'AssertionError. (list 'str "Post-condition for unit " (list 'quote n) " failed!")))
+                                                           '__ret)))
+                                         (list 'if (list 'unit-should-fail?)
+                                               (list 'throw (list 'AssertionError. (list 'str "Pre-condition for unit " (list 'quote n) " failed!")))
+                                               '__G)))
+
+                             ;; CASE: unit condition checking disabled
+                             (concat (list '->) (list '__G) prog))))]
+    Fn))
 
 (defn try-skip
   "Attempt to execute unit u on GRAPE G.
@@ -1400,6 +1402,26 @@ CALL {
   (try 
     (tryit G)
     (catch AssertionError _ (elseit G))))
+
+;; (defn try-else-2
+;;   [G tryit & elses]
+;;   (let [
+;;         _ (println "trying" tryit "with elses" (count elses) elses)
+;;   ]
+;;     (try
+;;       (tryit G)
+;;       (catch AssertionError _
+;;         (if (> (count elses) 1)
+;;           (let [
+;;                 _ (print "failed! recurse ")
+;;                 next-tryit (first elses)
+;;                 therest (rest elses)
+;;                 _ (println "with:" next-tryit therest)]
+;;             (apply try-else-2 G next-tryit therest)
+;;           ((first elses) G)))))))
+
+(defn try-else-2 
+  [G tryit & elses])
 
 (defmacro exists-graph? 
   "Takes a list of graph constraints.
