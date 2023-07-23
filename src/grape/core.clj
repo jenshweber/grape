@@ -307,6 +307,22 @@
 (defn unit-stack-get [trace]
        (swap! unit-stack-atom (fn [S] (unit-stack-get-internal trace S))))
 
+(defn get-unit-stack-max-size []
+  ((deref unit-policy-atom) :stack-size))
+
+(defn get-unit-stack-curr-size []
+  (count (deref unit-stack-atom)))
+
+(defn prune-unit-stack [n]
+  (swap! unit-stack-atom (fn [S] (into {} (take-last n S)))))
+
+(defn set-unit-stack-max-size [ss]
+  (do
+    (prune-unit-stack ss)
+    (swap! unit-policy-atom (fn [P] (assoc P :stack-size ss)))))
+
+
+
 (defn add-unit-frame
   "
   Adds a new unit execution frame to the unit stack and
@@ -314,10 +330,14 @@
   corresponding to this unit's execution.
   "
   ([name trace]
-   (let [id (generate-stack-uuid)
+   (let [limit (get-unit-stack-max-size)
+         curr (get-unit-stack-curr-size)
+         id (generate-stack-uuid)
          new-elem {:name name :pre nil :post nil :stack {}}
          new-trace (concat trace (list id))]
-     (unit-stack-put new-trace new-elem)
+     (if (= limit curr) 
+       (do (prune-unit-stack (- limit 1)) (unit-stack-put new-trace new-elem))
+       (unit-stack-put new-trace new-elem)) 
      id))
 
   ;; OVERLOAD for top-level units
@@ -371,10 +391,7 @@
   (unit-should-check?)
   (= ((deref unit-policy-atom) :fail) "FAIL")))
 
-(defn set-unit-stack-size [ss]
-  (do
-    (swap! unit-stack-atom (fn [S] (take ss S)))
-    (swap! unit-policy-atom (fn [P] (assoc P :stack-size ss)))))
+
 
 (defn add-constraint! [n s]
   (swap! constraints-atom (fn [c] (assoc c n s))))
