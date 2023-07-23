@@ -219,6 +219,7 @@
 (def rules-atom (atom {}))
 (def queries-atom (atom {}))
 (def constraints-atom (atom '{}))
+(def units-atom (atom {}))
 (def unit-stack-atom (atom {}))
 (def unit-policy-atom (atom {:check true, :fail "SILENT", :stack-size 100}))
 (def suppressed-atom (atom '()))
@@ -274,6 +275,17 @@
 
 (defn add-rule! [n s]
   (swap! rules-atom (fn [c] (assoc c n s))))
+
+(defn add-unit! 
+  [n params pre post prog doc to-exec]
+  (swap! units-atom
+         (fn [c]
+           (assoc c n {:doc doc 
+                       :params params
+                       :pre pre
+                       :post post
+                       :prog prog 
+                       :exec to-exec}))))
 
 (defn add-query! [n s]
   (swap! queries-atom (fn [c] (assoc c n s))))
@@ -1405,13 +1417,30 @@ CALL {
 
 (defn unit-os
   "Helper function for defining a unit"
-  [n params spec]
-  (intern 
-    *ns* 
-    (symbol (str (name n))) 
-    spec))
+  [n params pre post prog doc to-exec]
+  (add-unit! n params pre post prog (first doc) to-exec) 
+  ((intern *ns* (symbol (str (name n) "-show")) (fn [] ((deref units-atom) n))))
+  (intern *ns* (symbol (str (name n))) to-exec))
 
 (defn extract-clause [L sym] (rest (first (filter #(= (first %1) sym) L))))
+
+(defn symbol-is-unit? [sym]
+  (contains? (deref units-atom) sym))
+
+(defn inject-stack-trace-in-prog
+  "Given a graph program for execution as part of a unit, inject
+   a stack trace placeholder symbol into unit invocations and return
+   the updated graph program."
+  [prog sym-to-inject first?]
+  (let [is-list-func (and (list? prog) (symbol? (first prog)))
+        is-direct-func (symbol? prog)
+        is-direct-unit (and is-direct-func (symbol-is-unit? prog))
+        is-partial-unit (and is-list-func (symbol-is-unit? (first prog)))]
+    (cond first? (map (fn [x] (inject-stack-trace-in-prog x sym-to-inject false)) prog)
+          is-direct-unit (concat (list prog) (list sym-to-inject))
+          is-partial-unit (concat prog (list sym-to-inject))
+          is-list-func (map (fn [x] (inject-stack-trace-in-prog x sym-to-inject false)) prog)
+          :else prog)))
 
 (defmacro unit
   "Makes a new graph transformation unit and stores the
@@ -1421,22 +1450,27 @@ CALL {
   (let [pre (extract-clause args 'pre)
         post (extract-clause args 'post)
         prog (extract-clause args 'prog)
-        newprog (map #(concat (if (symbol? %1) (list %1) %1) (list (quote history))) prog)
+        doc (extract-clause args 'doc)
+        newprog (inject-stack-trace-in-prog prog 'stack-trace true)
         pre (if (> (count pre) 0) pre (list (list 'fn ['x] 'true)))
         post (if (> (count post) 0) post (list (list 'fn ['x] 'true)))
         Fn (list 'unit-os
                  (list 'quote n)
                  (list 'quote params)
+                 (list 'quote pre)
+                 (list 'quote post)
+                 (list 'quote prog)
+                 (list 'quote doc)
                  (list 'fn
 
                        ;; GIVEN ANON FUNCTION A LOCAL NAME
                        '__exec-rule
 
-                       ;; OVERLOAD with HISTORY
+                       ;; OVERLOAD with STACK TRACE
                        (list
 
                         ;; ARGUMENTS to FUNCTION
-                        (vec (concat (list '__G) params (list 'history)))
+                        (vec (concat (list '__G) params (list 'stack-trace)))
 
                         ;; FUNCITON BODY
                         (list 'if (list 'unit-should-check?)
@@ -1444,13 +1478,13 @@ CALL {
                               ;; CASE: unit condition checking enabled
                               (list 'let
                                     ['__pre-ret (list 'every? 'true? (list (concat (list 'juxt) pre) '__G))
-                                     'frame (list 'add-unit-frame (list 'quote n) 'history)
-                                     'history (list 'concat 'history (list 'list 'frame))]
-                                    (list 'set-unit-pre '__pre-ret 'history)
+                                     'frame (list 'add-unit-frame (list 'quote n) 'stack-trace)
+                                     'stack-trace (list 'concat 'stack-trace (list 'list 'frame))]
+                                    (list 'set-unit-pre '__pre-ret 'stack-trace)
                                     (list 'if '__pre-ret
                                           (list 'let ['__ret (concat (list '->) (list '__G) newprog)
                                                       '__post-ret (list 'every? 'true? (list (concat (list 'juxt) post) '__ret))]
-                                                (list 'set-unit-post '__post-ret 'history)
+                                                (list 'set-unit-post '__post-ret 'stack-trace)
                                                 (list 'if '__post-ret
                                                      ;; CASE: post condition passed
                                                       '__ret
