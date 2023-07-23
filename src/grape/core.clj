@@ -219,7 +219,7 @@
 (def rules-atom (atom {}))
 (def queries-atom (atom {}))
 (def constraints-atom (atom '{}))
-(def unit-stack-atom (atom ()))
+(def unit-stack-atom (atom {}))
 (def unit-policy-atom (atom {:check true, :fail "SILENT", :stack-size 100}))
 (def suppressed-atom (atom '()))
 
@@ -278,7 +278,34 @@
 (defn add-query! [n s]
   (swap! queries-atom (fn [c] (assoc c n s))))
 
-(defn generate-uuid [] (.toString (java.util.UUID/randomUUID)))
+(defn generate-stack-uuid [] (str "stack-" (.toString (java.util.UUID/randomUUID))))
+
+(defn unit-stack-get-internal [trace stack]
+  (if (= 1 (count trace))
+    ;; BASE CASE 
+    (stack (first trace))
+    ;; RECURSIVE CASE
+    (unit-stack-get-internal (rest trace) ((stack (first trace)) :stack))))
+
+(defn unit-stack-put-internal [trace value stack]
+
+  (if (= 1 (count trace))
+
+    ;; BASE CASE
+    (assoc stack (first trace) value)
+
+    ;; RECURSIVE CASE
+    (let [key (first trace)
+          obj (stack key)
+          updated (unit-stack-put-internal (rest trace) value (obj :stack))
+          obj (assoc obj :stack updated)]
+      (assoc stack key obj))))
+
+(defn unit-stack-put [trace value]
+       (swap! unit-stack-atom (fn [S] (unit-stack-put-internal trace value S))))
+
+(defn unit-stack-get [trace]
+       (swap! unit-stack-atom (fn [S] (unit-stack-get-internal trace S))))
 
 (defn add-unit-frame
   "
@@ -286,36 +313,35 @@
   returns a unique identifier (uuid) for that new frame
   corresponding to this unit's execution.
   "
-  [name]
-  (let [ss ((deref unit-policy-atom) :stack-size)
-        id (generate-uuid)
-        new-elem (list {:name name :pre nil :post nil :id id})]
-    (swap! unit-stack-atom
-           (fn [S] (concat
-                    new-elem
-                    (if
-                     (>= (count S) ss)
-                      (butlast S) ;; drop off last element
-                      S))))
-    id))
+  ([name trace]
+   (let [id (generate-stack-uuid)
+         new-elem {:name name :pre nil :post nil :stack {}}
+         new-trace (concat trace (list id))]
+     (unit-stack-put new-trace new-elem)
+     id))
+
+  ;; OVERLOAD for top-level units
+  ([name] (add-unit-frame name '())))
 
 (defn unit-stack [] (deref unit-stack-atom))
-(defn reset-unit-stack[] (swap! unit-stack-atom (fn [_] ())))
-(defn last-unit [] (first (deref unit-stack-atom)))
+(defn reset-unit-stack[] (swap! unit-stack-atom (fn [_] {})))
+(defn last-unit [] (last (deref unit-stack-atom)))
 
-(defn pre? [] ((last-unit) :pre))
+(defn pre? [] ((second (last-unit)) :pre))
 
 (defn post? [] ((last-unit) :post))
 
-(defn set-unit-pre [result]
-  (let [new-elem (list (assoc (last-unit) :pre result))]
-    (swap! unit-stack-atom
-           (fn [S] (concat new-elem (rest S))))))
+(defn set-unit-pre [result trace]
+    (swap! unit-stack-atom (fn [S] 
+                             (let [old-elem (unit-stack-get-internal trace S) 
+                                   new-elem (assoc old-elem :pre result)]
+                               (unit-stack-put-internal trace new-elem S)))))
 
-(defn set-unit-post [result]
-  (let [new-elem (list (assoc (last-unit) :post result))]
-    (swap! unit-stack-atom
-           (fn [S] (concat new-elem (rest S))))))
+(defn set-unit-post [result trace]
+  (swap! unit-stack-atom (fn [S]
+                           (let [old-elem (unit-stack-get-internal trace S)
+                                 new-elem (assoc old-elem :post result)]
+                             (unit-stack-put-internal trace new-elem S)))))
 
 (defn unit-policy? [] (deref unit-policy-atom))
 
@@ -1313,6 +1339,7 @@ CALL {
 (defn unit-os
   "Helper function for defining a unit"
   [n params spec]
+  (println "unit-os" n params spec)
   (intern 
     *ns* 
     (symbol (str (name n))) 
@@ -1328,6 +1355,7 @@ CALL {
   (let [pre (extract-clause args 'pre)
         post (extract-clause args 'post)
         prog (extract-clause args 'prog)
+        newprog (map #(concat (if (symbol? %1) (list %1) %1) (list (quote history))) prog)
         pre (if (> (count pre) 0) pre (list (list 'fn ['x] 'true)))
         post (if (> (count post) 0) post (list (list 'fn ['x] 'true)))
         Fn (list 'unit-os
@@ -1335,33 +1363,54 @@ CALL {
                  (list 'quote params)
                  (list 'fn
 
-                       (vec (concat (list '__G) params))
+                       ;; GIVEN ANON FUNCTION A LOCAL NAME
+                       '__exec-rule
 
-                       (list 'if (list 'unit-should-check?)
+                       ;; OVERLOAD FUNCTION with PARENT CALL LIST
+                       (list
+
+                        (vec (concat (list '__G) params (list 'history)))
+
+                        (list 'println "exec-unit" (list 'quote n) "overload with params & history" params 'history) ;; TODO - DELETE
+                        
+                        (list 'if (list 'unit-should-check?)
 
                               ;; CASE: unit condition checking enabled
-                             (list 'let
-                                   ['__pre-ret (list 'every? 'true? (list (concat (list 'juxt) pre) '__G))]
-                                   (list 'add-unit-frame (list 'quote n))
-                                   (list 'set-unit-pre '__pre-ret)
-                                   (list 'if '__pre-ret
-                                         (list 'let ['__ret (concat (list '->) (list '__G) prog)
-                                                     '__post-ret (list 'every? 'true? (list (concat (list 'juxt) post) '__ret))]
-                                               (list 'set-unit-pre '__pre-ret)
-                                               (list 'set-unit-post '__post-ret)
-                                               (list 'if '__post-ret
+                              (list 'let
+                                    [
+                                     'x (list 'println "history is" (list 'type 'history) 'history)
+                                     '__pre-ret (list 'every? 'true? (list (concat (list 'juxt) pre) '__G))
+                                     'frame (list 'add-unit-frame (list 'quote n) 'history)
+                                     'x (list 'println "new frame is" 'frame)
+                                     'history (list 'concat 'history (list 'list 'frame)) 
+                                     'x (list 'println "new is history" 'history)
+                                     ]
+                                    (list 'set-unit-pre '__pre-ret 'history)
+                                    (list 'if '__pre-ret
+                                          (list 'let [
+                                                      'x (list 'println "prog with history" (list 'quote newprog))
+                                                      '__ret (concat (list '->) (list '__G) newprog)
+                                                      '__post-ret (list 'every? 'true? (list (concat (list 'juxt) post) '__ret))] 
+                                                (list 'set-unit-post '__post-ret 'history)
+                                                (list 'if '__post-ret
                                                      ;; CASE: post condition passed
-                                                     '__ret
+                                                      '__ret
                                                      ;; CASE: post condition failed
-                                                     (list 'if (list 'unit-should-fail?)
-                                                           (list 'throw (list 'AssertionError. (list 'str "Post-condition for unit " (list 'quote n) " failed!")))
-                                                           '__ret)))
-                                         (list 'if (list 'unit-should-fail?)
-                                               (list 'throw (list 'AssertionError. (list 'str "Pre-condition for unit " (list 'quote n) " failed!")))
-                                               '__G)))
+                                                      (list 'if (list 'unit-should-fail?)
+                                                            (list 'throw (list 'AssertionError. (list 'str "Post-condition for unit " (list 'quote n) " failed!")))
+                                                            '__ret)))
+                                          (list 'if (list 'unit-should-fail?)
+                                                (list 'throw (list 'AssertionError. (list 'str "Pre-condition for unit " (list 'quote n) " failed!")))
+                                                '__G)))
 
                              ;; CASE: unit condition checking disabled
-                             (concat (list '->) (list '__G) prog))))]
+                              (concat (list '->) (list '__G) prog)))
+
+                       (list
+                        (vec (concat (list '__G) params))
+                        (list 'println "exec-unit overload without history" '__G params) ;; TODO - DELETE 
+                        (concat (list '__exec-rule) (list '__G) params (list '()))
+                        )))]
     Fn))
 
 (defn try-skip
