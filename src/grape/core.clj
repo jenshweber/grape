@@ -1406,7 +1406,6 @@ CALL {
 (defn unit-os
   "Helper function for defining a unit"
   [n params spec]
-  (println "unit-os" n params spec)
   (intern 
     *ns* 
     (symbol (str (name n))) 
