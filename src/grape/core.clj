@@ -221,7 +221,7 @@
 (def constraints-atom (atom '{}))
 (def units-atom (atom {}))
 (def unit-stack-atom (atom {}))
-(def unit-policy-atom (atom {:check true, :fail "SILENT", :stack-size 100}))
+(def unit-policy-atom (atom {:check true, :fail false, :stack-size 100}))
 (def suppressed-atom (atom '()))
 
 (def debug-atom (atom false))
@@ -373,7 +373,7 @@
    
   If no trace is provided, then execution frame is added
   to the top-level of the stack.
-  " 
+  "
   ([name trace]
    (let [limit (get-unit-stack-max-size)
          curr (get-unit-stack-curr-size)
@@ -382,6 +382,8 @@
          new-trace (concat trace (list id))]
      (when (= limit curr) (prune-unit-stack 1))
      (unit-stack-put new-trace new-elem)
+     (when (= 0 (count trace))
+       (swap! unit-stack-atom (fn [S] (assoc S :last-frame id))))
      id))
 
   ;; OVERLOAD for top-level units
@@ -393,12 +395,14 @@
   "Resets the unit execution stack to be empty."
   [] (swap! unit-stack-atom (fn [_] {})))
 
-(defn last-unit [] (last (deref unit-stack-atom)))
+(defn last-unit []
+  (let [S (deref unit-stack-atom)
+        last-id (S :last-frame)] (S last-id)))
 
 (defn pre?
   "Returns the pre-condition value for the most recent 
    top-level frame on unit execution stack."
-  [] ((second (last-unit)) :pre))
+  [] ((last-unit) :pre))
 
 (defn post? 
   "Returns the post-condition value for the most recent 
@@ -431,11 +435,11 @@
 
 (defn set-unit-failure-policy 
   "Set the failure policy for unit pre- and post-conditions.
-  If set to SILENT, then unit execution proceeds, but flags
+  If set to false, then unit execution proceeds, but flags
   are set (access via unit-pre? and unit-post?).
   If set to FAIL, then if pre- or post-conditions are violated,
   an exception will be thrown.
-  Default behaviour is SILENT."
+  Default behaviour is false"
   [policy]
   (swap! unit-policy-atom (fn [p] (assoc p :fail policy))))
 
@@ -453,7 +457,7 @@
 (defn unit-should-fail? [] 
   (and 
   (unit-should-check?)
-  (= ((deref unit-policy-atom) :fail) "FAIL")))
+  (= ((deref unit-policy-atom) :fail) true)))
 
 (defn add-constraint! [n s]
   (swap! constraints-atom (fn [c] (assoc c n s))))
@@ -1464,7 +1468,7 @@ CALL {
                  (list 'fn
 
                        ;; GIVEN ANON FUNCTION A LOCAL NAME
-                       '__exec-rule
+                       '__exec-unit
 
                        ;; OVERLOAD with STACK TRACE
                        (list
@@ -1481,7 +1485,8 @@ CALL {
                                      'frame (list 'add-unit-frame (list 'quote n) 'stack-trace)
                                      'stack-trace (list 'concat 'stack-trace (list 'list 'frame))]
                                     (list 'set-unit-pre '__pre-ret 'stack-trace)
-                                    (list 'if '__pre-ret
+                                    (list 'when (list 'and (list 'unit-should-fail?) (list 'not '__pre-ret))
+                                          (list 'throw (list 'AssertionError. (list 'str "Pre-condition for unit " (list 'quote n) " failed!"))))
                                           (list 'let ['__ret (concat (list '->) (list '__G) newprog)
                                                       '__post-ret (list 'every? 'true? (list (concat (list 'juxt) post) '__ret))]
                                                 (list 'set-unit-post '__post-ret 'stack-trace)
@@ -1491,10 +1496,7 @@ CALL {
                                                      ;; CASE: post condition failed
                                                       (list 'if (list 'unit-should-fail?)
                                                             (list 'throw (list 'AssertionError. (list 'str "Post-condition for unit " (list 'quote n) " failed!")))
-                                                            '__ret)))
-                                          (list 'if (list 'unit-should-fail?)
-                                                (list 'throw (list 'AssertionError. (list 'str "Pre-condition for unit " (list 'quote n) " failed!")))
-                                                '__G)))
+                                                            '__ret))))
 
                              ;; CASE: unit condition checking disabled
                               (concat (list '->) (list '__G) prog)))
@@ -1502,47 +1504,80 @@ CALL {
                        ;; OVERLOAD without HISTORY
                        (list
                         (vec (concat (list '__G) params))
-                        (concat (list '__exec-rule) (list '__G) params (list '())))))]
+                        (concat (list '__exec-unit) (list '__G) params (list '())))))]
     Fn))
 
-(defn try-skip
+(defmacro try-skip
   "Attempt to execute unit u on GRAPE G.
    If the unit's execution fails, then return the original GRAPE G. 
    If the unit's execution succeeds, then return the new GRAPE. 
    Unit failure is only detected if unit failure policy is set to FAIL;
    otherwise, unit failures are ignored."
-  [G u]
-  (try (u G) (catch AssertionError _ G)))
+  [G tryit]
+  (let [is-list-func (and (list? tryit) (symbol? (first tryit)))
+        invoke (if is-list-func
+                 (concat (list (first tryit)) (list G) (rest tryit))
+                 (concat (list tryit) (list G)))
+        body (list 'try invoke (list 'catch 'AssertionError '_ G))
+        _ (println body)]
+    body))
 
-(defn try-empty
+(defmacro try-empty
   "Attempt to execute unit u on GRAPE G.
    If the unit's execution fails, then returns an empty GRAPE (an empty list).
    If the unit's execution succeeds, then return the resulting GRAPE.
    Only works if unit failure policy is set to FAIL; otherwise failures
    are ignored."
-  [G u]
-  (try (u G) (catch AssertionError _ ())))
+  [G tryit]
+  (let [is-list-func (and (list? tryit) (symbol? (first tryit)))
+        invoke (if is-list-func
+                 (concat (list (first tryit)) (list G) (rest tryit))
+                 (concat (list tryit) (list G)))
+        body (list 'try invoke (list 'catch 'AssertionError '_ '()))]
+    body))
 
-(defn try-resume
-  "Attempt to execute unit u on GRAPE G.
-   If the unit's execution fails, then disregard the failure
-   and return the result anyways."
-  [G u]
-  (let [og-policy ((deref unit-policy-atom) :fail)]
-    (set-unit-failure-policy "SILENT")
-    (let [G2 (u G)]
-      (set-unit-failure-policy og-policy)
-      G2)))
+(defmacro try-resume-and-do
+  "Attempt to execute unit u on GRAPE G. Regardless of the outcome
+   return the result. If the unit's pre or post condition(s) fail
+   then also execute the doit unit."
+  [G tryit doit]
+  (let [try-is-list-func (and (list? tryit) (symbol? (first tryit)))
+        do-is-list-func (and (list? doit) (symbol? (first doit)))
+        invoke-try (if try-is-list-func
+                     (concat (list (first tryit)) (list G) (rest tryit))
+                     (concat (list tryit) (list G)))
+        invoke-do (if do-is-list-func
+                    (concat (list (first doit)) (list '__G2) (rest doit))
+                    (concat (list doit) (list '__G2)))
+        body (list 'let
+                   ['og-policy (list (list 'deref 'unit-policy-atom) ':fail)]
+                   (list 'set-unit-failure-policy 'false)
+                   (list 'let
+                         ['__G2 invoke-try]
+                         (list 'set-unit-failure-policy 'og-policy)
+                         (list 'if
+                               (list 'and (list 'pre?) (list 'post?))
+                               '__G2
+                               invoke-do)))] body))
 
-(defn try-else
-  "Attempt to execute unit tryit on GRAPE G.
-   If the unit's execution fails, then execute the unit elseit.
+
+
+(defmacro try-else
+  "Attempt to execute unit tryit on input GRAPE G.
+   If the unit's execution fails, then execute the unit elseit on input GRAPE G.
    If the unit's execution succeeds, then return that result.
    Only works if unit failure policy is set to FAIL."
   [G tryit elseit]
-  (try 
-    (tryit G)
-    (catch AssertionError _ (elseit G))))
+  (let [try-is-list-func (and (list? tryit) (symbol? (first tryit)))
+        else-is-list-func (and (list? elseit) (symbol? (first elseit)))
+        invoke-try (if try-is-list-func
+                 (concat (list (first tryit)) (list G) (rest tryit))
+                 (concat (list tryit) (list G)))
+        invoke-else (if else-is-list-func
+                 (concat (list (first elseit)) (list G) (rest elseit))
+                 (concat (list elseit) (list G)))
+        body (list 'try invoke-try (list 'catch 'AssertionError '_ invoke-else))]
+    body))
 
 (defmacro exists-graph? 
   "Takes a list of graph constraints.
