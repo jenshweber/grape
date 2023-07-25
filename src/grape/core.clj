@@ -374,11 +374,11 @@
   If no trace is provided, then execution frame is added
   to the top-level of the stack.
   "
-  ([name trace]
+  ([name params trace]
    (let [limit (get-unit-stack-max-size)
          curr (get-unit-stack-curr-size)
          id (generate-stack-uuid)
-         new-elem {:name name :pre nil :post nil :stack {}}
+         new-elem {:name name :pre nil :post nil :stack {} :params params}
          new-trace (concat trace (list id))]
      (when (= limit curr) (prune-unit-stack 1))
      (unit-stack-put new-trace new-elem)
@@ -387,9 +387,11 @@
      id))
 
   ;; OVERLOAD for top-level units
-  ([name] (add-unit-frame name '())))
+  ([name params] (add-unit-frame name params '())))
 
 (defn unit-stack "Returns the current unit execution stack." [] (deref unit-stack-atom))
+
+(defn print-unit-stack "Pretty prints the current unit execution stack." [] (clojure.pprint/pprint (unit-stack)))
 
 (defn reset-unit-stack
   "Resets the unit execution stack to be empty."
@@ -1424,6 +1426,12 @@ CALL {
   [n params pre post prog doc to-exec]
   (add-unit! n params pre post prog (first doc) to-exec) 
   ((intern *ns* (symbol (str (name n) "-show")) (fn [] ((deref units-atom) n))))
+  ((intern *ns* (symbol (str (name n) "-doc")) (fn [] (((deref units-atom) n) :doc))))
+  ((intern *ns* (symbol (str (name n) "-pre")) (fn [] (((deref units-atom) n) :pre))))
+  ((intern *ns* (symbol (str (name n) "-post")) (fn [] (((deref units-atom) n) :post))))
+  ((intern *ns* (symbol (str (name n) "-prog")) (fn [] (((deref units-atom) n) :prog))))
+  ((intern *ns* (symbol (str (name n) "-prog")) (fn [] (((deref units-atom) n) :prog))))
+  ((intern *ns* (symbol (str (name n) "-params")) (fn [] (((deref units-atom) n) :params))))
   (intern *ns* (symbol (str (name n))) to-exec))
 
 (defn extract-clause [L sym] (rest (first (filter #(= (first %1) sym) L))))
@@ -1482,7 +1490,7 @@ CALL {
                               ;; CASE: unit condition checking enabled
                               (list 'let
                                     ['__pre-ret (list 'every? 'true? (list (concat (list 'juxt) pre) '__G))
-                                     'frame (list 'add-unit-frame (list 'quote n) 'stack-trace)
+                                     'frame (list 'add-unit-frame (list 'quote n) params 'stack-trace)
                                      'stack-trace (list 'concat 'stack-trace (list 'list 'frame))]
                                     (list 'set-unit-pre '__pre-ret 'stack-trace)
                                     (list 'when (list 'and (list 'unit-should-fail?) (list 'not '__pre-ret))
