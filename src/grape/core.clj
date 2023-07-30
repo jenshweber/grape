@@ -1526,8 +1526,7 @@ CALL {
         invoke (if is-list-func
                  (concat (list (first tryit)) (list G) (rest tryit))
                  (concat (list tryit) (list G)))
-        body (list 'try invoke (list 'catch 'AssertionError '_ G))
-        _ (println body)]
+        body (list 'try invoke (list 'catch 'AssertionError '_ G))]
     body))
 
 (defmacro try-empty
