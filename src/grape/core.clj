@@ -234,7 +234,7 @@
     (apply f s)))
 
 
-(def checkeq-atom (atom false))
+(def checkeq-atom (atom true))
 
 (defn checkeq! [b]
   (swap! checkeq-atom (fn [_] b)))
@@ -666,7 +666,7 @@
                       "with _gn optional match (_el) where ID(_el) in _gn.active "
                       " with _gn, collect (_el._fp) as _fps "
                       " set _gn._fps = apoc.coll.sort(_fps)"
-                      " with _gn set _gn._fp=apoc.hashing.fingerprint (_gn, ['uid']) "
+                      " with _gn set _gn._fp=apoc.hashing.fingerprint (_gn, ['uid', 'active']) "
                       "with _gn optional match (_gconf:`__Graph`{`_fp`:_gn.`_fp`}) "
                       " where  ID(_gn) <> ID(_gconf) and exists ((_gconf)-[:prov*0..]->()<-[:prov*0..]-(_gn) )"
                       " create (_gn)-[:conf]->(_gconf)")
@@ -766,9 +766,8 @@
                    "-[:prov{rule:'" (str n "*" (if (> limit 0) (str "<n" limit) "")) "'}]->(_gp)"
                    "return _gn } "
                    "  with * match (_g:__Graph) where ID(_g) IN _gids  "
-                   " with _gp, _g, _gn "
-           ;   " and not EXISTS {match (g1:`__Graph`)-[:read]->(e)<-[:delete]-(g2:`__Graph`) where g1.uid in " gss
-           ;   "                 and g2.uid in " gss " and g1 <> g2 } "
+              " and not EXISTS {match (g1:`__Graph`)-[:read]->(e)<-[:delete]-(g2:`__Graph`) where ID(g1) in _gids " 
+              "                 and ID(g2) in _gids and g1 <> g2 } "
                    " with  _g, _gn, _gp call { with  _gn, _gp merge (_gn)-[:prov{rule:'" (str n "*" (if (> limit 0) (str "<n" limit) "")) "'}]->(_gp) }"
                    (if (trackreads?)
                      (str
@@ -793,7 +792,7 @@
                       " with _gn, collect (_el._fp) as _fps "
                       " with _gn, _fps "
                       " set _gn._fps = apoc.coll.sort(_fps) "
-                      " with _gn set _gn._fp=apoc.hashing.fingerprint (_gn, ['uid']) ")
+                      " with _gn set _gn._fp=apoc.hashing.fingerprint (_gn, ['uid', 'active']) ")
                      " ")
 
                    " RETURN distinct _gn {.uid}")]
