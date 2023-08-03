@@ -284,7 +284,7 @@
 (def conn
   (do
     (try
-      (-> (db/connect (URI. "bolt://localhost:7687")
+      (-> (db/connect (URI. "bolt://neo4j:7687")
                       "neo4j"
                       "grapevine")
           db/get-session)
