@@ -1620,7 +1620,6 @@ CALL {
         rels     (map viewoccrels- gs)]
     (-> (str "digraph G { "
              "compound=true; "
-             "size=\"8\""
              (apply str (concat clusters rels))
              "}")
         show)))
@@ -1733,7 +1732,8 @@ CALL {
         edges (filter (fn [x] (some #(= "__Edge" %) (getLabels x))) res)
         edgeStr (apply str (map ek->dot edges))
         graphs (filter (fn [x] (empty? (getLabels x))) res)]
-    (str "digraph g { size=\"8\" splines=true overlap=false subgraph cluster0 { margin=0 "
+    ;graph [size=\"11,8.5\"] 
+    (str "digraph g { splines=true overlap=false subgraph cluster0 { margin=0 "
          "label=\"GRAPH: " (or (-> graphs first  getTag)
                                (-> graphs first second :uid)) "\"; \n"
          nodeStr
