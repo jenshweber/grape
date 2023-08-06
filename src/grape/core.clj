@@ -277,7 +277,7 @@
   (swap! rules-atom (fn [c] (assoc c n s))))
 
 (defn add-unit! 
-  [n params pre post prog doc to-exec]
+  [n params pre post prog doc rules to-exec]
   (swap! units-atom
          (fn [c]
            (assoc c n {:doc doc 
@@ -285,6 +285,7 @@
                        :pre pre
                        :post post
                        :prog prog 
+                       :rules rules
                        :exec to-exec}))))
 
 (defn add-query! [n s]
@@ -1423,14 +1424,15 @@ CALL {
 
 (defn unit-os
   "Helper function for defining a unit"
-  [n params pre post prog doc to-exec]
-  (add-unit! n params pre post prog (first doc) to-exec) 
+  [n params pre post prog doc rules to-exec]
+  (add-unit! n params pre post prog (first doc) rules to-exec)
   ((intern *ns* (symbol (str (name n) "-show")) (fn [] ((deref units-atom) n))))
   ((intern *ns* (symbol (str (name n) "-doc")) (fn [] (((deref units-atom) n) :doc))))
   ((intern *ns* (symbol (str (name n) "-pre")) (fn [] (((deref units-atom) n) :pre))))
   ((intern *ns* (symbol (str (name n) "-post")) (fn [] (((deref units-atom) n) :post))))
   ((intern *ns* (symbol (str (name n) "-prog")) (fn [] (((deref units-atom) n) :prog))))
   ((intern *ns* (symbol (str (name n) "-prog")) (fn [] (((deref units-atom) n) :prog))))
+  ((intern *ns* (symbol (str (name n) "-rules")) (fn [] (((deref units-atom) n) :rules))))
   ((intern *ns* (symbol (str (name n) "-params")) (fn [] (((deref units-atom) n) :params))))
   (intern *ns* (symbol (str (name n))) to-exec))
 
@@ -1463,6 +1465,8 @@ CALL {
         post (extract-clause args 'post)
         prog (extract-clause args 'prog)
         doc (extract-clause args 'doc)
+        rules (extract-clause args 'rules)
+        created-rules (map #(eval %1) rules)
         newprog (inject-stack-trace-in-prog prog 'stack-trace true)
         pre (if (> (count pre) 0) pre (list (list 'fn ['x] 'true)))
         post (if (> (count post) 0) post (list (list 'fn ['x] 'true)))
@@ -1473,6 +1477,7 @@ CALL {
                  (list 'quote post)
                  (list 'quote prog)
                  (list 'quote doc)
+                 (list 'quote created-rules)
                  (list 'fn
 
                        ;; GIVEN ANON FUNCTION A LOCAL NAME
