@@ -467,7 +467,7 @@
 (def conn
   (do
     (try
-      (-> (db/connect (URI. "bolt://neo4j:7687")
+      (-> (db/connect (URI. "bolt://localhost:7687")
                       "neo4j"
                       "grapevine")
           db/get-session)
@@ -988,7 +988,7 @@
   (debug println "*** CHECK INVARIANTS ")
   (->
    (dbquery (str "MATCH (g:`__Graph`{uid:\"" (first g) "\"})-[:prov*0..]->(gs) "
-                 " with gs optional match (gs)-[_inve]->(inve) "
+                 " with gs optional match (gs)-[:_inve]->(inve) "
                  " with * optional match (gs)-[:_inva]->(inva) "
                  " return collect(inve.name) as enforced, "
                  " collect(inva.name) as asserted "))
@@ -1004,6 +1004,7 @@
 
 (defn- check-invariants [gr]
   (let [invs (get-inv gr)
+        _ (println "check-invarants" gr)
         ge (enforce- gr (map #(-> % symbol eval)
                              (:enforced invs)))]
     (doseq [g ge]
