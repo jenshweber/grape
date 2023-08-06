@@ -1004,7 +1004,6 @@
 
 (defn- check-invariants [gr]
   (let [invs (get-inv gr)
-        _ (println "check-invarants" gr)
         ge (enforce- gr (map #(-> % symbol eval)
                              (:enforced invs)))]
     (doseq [g ge]
