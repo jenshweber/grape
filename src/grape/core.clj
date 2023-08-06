@@ -276,15 +276,15 @@
 (defn add-rule! [n s]
   (swap! rules-atom (fn [c] (assoc c n s))))
 
-(defn add-unit! 
+(defn add-unit!
   [n params pre post prog doc rules to-exec]
   (swap! units-atom
          (fn [c]
-           (assoc c n {:doc doc 
+           (assoc c n {:doc doc
                        :params params
                        :pre pre
                        :post post
-                       :prog prog 
+                       :prog prog
                        :rules rules
                        :exec to-exec}))))
 
@@ -1466,7 +1466,7 @@ CALL {
         prog (extract-clause args 'prog)
         doc (extract-clause args 'doc)
         rules (extract-clause args 'rules)
-        created-rules (map #(eval %1) rules)
+        created-rules (if (empty? rules) nil (map #(eval %1) rules))
         newprog (inject-stack-trace-in-prog prog 'stack-trace true)
         pre (if (> (count pre) 0) pre (list (list 'fn ['x] 'true)))
         post (if (> (count post) 0) post (list (list 'fn ['x] 'true)))
@@ -1500,16 +1500,16 @@ CALL {
                                     (list 'set-unit-pre '__pre-ret 'stack-trace)
                                     (list 'when (list 'and (list 'unit-should-fail?) (list 'not '__pre-ret))
                                           (list 'throw (list 'AssertionError. (list 'str "Pre-condition for unit " (list 'quote n) " failed!"))))
-                                          (list 'let ['__ret (concat (list '->) (list '__G) newprog)
-                                                      '__post-ret (list 'every? 'true? (list (concat (list 'juxt) post) '__ret))]
-                                                (list 'set-unit-post '__post-ret 'stack-trace)
-                                                (list 'if '__post-ret
+                                    (list 'let ['__ret (concat (list '->) (list '__G) newprog)
+                                                '__post-ret (list 'every? 'true? (list (concat (list 'juxt) post) '__ret))]
+                                          (list 'set-unit-post '__post-ret 'stack-trace)
+                                          (list 'if '__post-ret
                                                      ;; CASE: post condition passed
-                                                      '__ret
+                                                '__ret
                                                      ;; CASE: post condition failed
-                                                      (list 'if (list 'unit-should-fail?)
-                                                            (list 'throw (list 'AssertionError. (list 'str "Post-condition for unit " (list 'quote n) " failed!")))
-                                                            '__ret))))
+                                                (list 'if (list 'unit-should-fail?)
+                                                      (list 'throw (list 'AssertionError. (list 'str "Post-condition for unit " (list 'quote n) " failed!")))
+                                                      '__ret))))
 
                              ;; CASE: unit condition checking disabled
                               (concat (list '->) (list '__G) prog)))
