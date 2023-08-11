@@ -3,15 +3,12 @@
    [clojure.math.combinatorics :as combo]
    [clojure.string :as str]
    [clojure.set :refer [subset? difference]]
-   [grape.tx-cypher :refer :all]
    [grape.util :refer :all]
    [grape.analysis :refer :all]
-   [grape.tx-cypher :refer :all]
    [environ.core :refer [env]]
    [neo4j-clj.core :as db]
    [schema.core :as s]
    [dorothy.core :as dorothy]
-   [clojure.data.codec.base64 :as b64]
    [gorilla-repl.html :as html]
    [taoensso.tufte :as tufte :refer (defnp p profiled profile)])
   (:import (java.net URI)))
@@ -23,7 +20,6 @@
 ; GraphViz Visualization
 ; ---------------------------------------------------
 
-(import javax.imageio.ImageIO)
 
 (def ctr-atom (atom 0))
 
@@ -34,18 +30,6 @@
   (swap! ctr-atom (fn [c] (+ 1 c)))
   (deref ctr-atom))
 
-(defn dot->render [g]
-  (dorothy/render g {:format :png}))
-
-(defn dot->image [g]
-  (String. (b64/encode (dorothy/render g {:format :png}))))
-
-;; (defn show [g]
-;;   (image/image-view
-;;    (ImageIO/read
-;;     (io/input-stream
-;; ;  (dorothy/save! (dorothy/render  g {:format :png}) "out.png")
-;;      (dorothy/render  g {:format :png})))))
 
 (defn show [g]
   (html/html-view
@@ -444,6 +428,10 @@
           ;_ (println "\n\n **** " nc " --- " ec " \n\n ")
           f (fn [x] (str " ID(" (first x) ")<> ID(" (second x) ")"))]
       (map f ec))))
+
+(defn filter-elem [k c]
+  "filter out specified graph element type k (node or edge)"
+  (filter (fn [x] (= k (first x))) c))
 
 (defn nac->cypher [nac bnodes bedges scope]
   (if (nil? nac)
@@ -891,43 +879,6 @@
     (checkeq! m)
     (removeConfluent-loc gne)
     ))
-
-(defn meld [gs]
-  (let [
-        gss (str "[ "
-                 (apply str (interpose ", " (map (fn [x] (str "\"" x "\"")) gs)))
-                 "]")
-        qstr (str
-              " create (_gn:__Graph {uid: randomUUID()}) "
-              " with * "
-              " match (_g:`__Graph`)-[_p:prov]->(_gp) where _g.uid in " gss
-           ;   " and not EXISTS {match (g1:`__Graph`)-[:read]->(e)<-[:delete]-(g2:`__Graph`) where g1.uid in " gss
-           ;   "                 and g2.uid in " gss " and g1 <> g2 } "
-              " with * merge (_gn)-[:prov{rule:_p.rule + '*'}]->(_gp) "
-              " with distinct _g, _gn, _gp call { with _g, _gn match (_g)-[:read]->(read) "
-              "                                with distinct _gn, read create (_gn)-[:read]->(read)}   "
-              " with  _g, _gn, _gp call { with _g, _gn match (_g)-[:delete]->(deleted) "
-              "                                with distinct _gn, deleted create (_gn)-[:delete]->(deleted) return collect(ID(deleted)) as dels }"
-              " with  _g, _gn, _gp, dels call {with _g, _gn  match (_g)-[:create]->(created) "
-              "                                with distinct _gn, created create (_gn)-[:create]->(created) return collect(ID(created)) as creas }"
-              " with _g, _gn, _gp, dels, creas call { with _g detach delete _g }"
-              " with _gn, _gp, collect(dels) as delss, collect(creas) as creass "
-              " set _gn.active=apoc.coll.unionAll(apoc.coll.removeAll(_gp.active, "
-              "                              apoc.coll.flatten(delss)),apoc.coll.flatten(creass)) "
-              (if (checkeq?)
-                (str
-                 " with _gn optional match (_gn) -[:prov*0..]->()-[:create]->(_el) "
-                 " with _gn, collect (_el._fp) as _fps "
-                 " with _gn, _fps "
-                 " set _gn._fps = apoc.coll.sort(_fps) "
-                 " with _gn set _gn._fp=apoc.hashing.fingerprint (_gn, ['uid']) ")
-                " ")
-              " return distinct _gn ")]
-    (-> (dbquery qstr) first :_gn :uid list)))
-
-;(defn- exec*- [g n par]
-;  (let [gns (search-and-derive g n par true)]
-;    gns))
 
 
 
@@ -1678,29 +1629,6 @@ CALL {
                      return head(gnew).uid as gn")]
     (map :gn (dbquery qstr))))
 
-(defn history-old [gs]
-  (let [g (first gs)
-        qstr (str "match(g:`__Graph`{uid:\"" g "\"})
-                     -[:prov*0..]->(g0:`__Graph`) 
-                     where not exists( (g0)-[:prov]->() ) 
-                     with g0 create (gn:`__Graph`{uid:randomUUID()}) with g0,gn  
-                     match (g0)<-[:prov*0..]-(g1:`__Graph`) 
-                     with g0,g1,gn 
-                     create(g1g:Graph:`__Node`{uid:g1.uid, tag:g1.tag})<-[:create]-(gn) 
-                     with collect(distinct gn) as gnew 
-                     call {with gnew with head(gnew) as gn 
-                           match(gn)-[:create]->(g1g:Graph) 
-                          with * match(g1:`__Graph`{uid:g1g.uid})-[p:prov]->(g2:`__Graph`) 
-                          with * match(g2g:Graph {uid:g2.uid})<-[:create]-(gn) 
-                          with * create (gn)-[:create]->(e:__Edge:occ{rule:p.rule})-[:src]->(g2g) 
-                          with * create(e)-[:tar]->(g1g)
-                          with * call { with g1 match (g1)-[p:prov*1..]->(gx:`__Graph`) return count(*) as steps}
-                          set e.src= ID(g2g), e.tar= ID(g1g),
-                              e.step=steps
-                                                } 
-                     with *
-                     return head(gnew).uid as gn")]
-    (map :gn (dbquery qstr))))
 
 (defn- trace [g]
   (let [qstr (str "match(g:`__Graph`{uid:\"" g "\"})
