@@ -203,6 +203,9 @@
 (def rules-atom (atom {}))
 (def queries-atom (atom {}))
 (def constraints-atom (atom '{}))
+(def units-atom (atom {}))
+(def unit-stack-atom (atom {}))
+(def unit-policy-atom (atom {:check true, :fail false, :stack-size 100}))
 (def suppressed-atom (atom '()))
 
 (def debug-atom (atom false))
@@ -234,10 +237,8 @@
 (defn trackreads? []
   (deref trackreads-atom))
 
-
 (defn rules []
   (deref rules-atom))
-
 
 (defn queries []
   (deref queries-atom))
@@ -259,8 +260,191 @@
 (defn add-rule! [n s]
   (swap! rules-atom (fn [c] (assoc c n s))))
 
+(defn add-unit!
+  [n params pre post prog doc rules to-exec]
+  (swap! units-atom
+         (fn [c]
+           (assoc c n {:doc doc
+                       :params params
+                       :pre pre
+                       :post post
+                       :prog prog
+                       :rules rules
+                       :exec to-exec}))))
+
 (defn add-query! [n s]
   (swap! queries-atom (fn [c] (assoc c n s))))
+
+(defn generate-stack-uuid [] (str "stack-" (.toString (java.util.UUID/randomUUID))))
+
+(defn _unit-stack-get [trace stack]
+  (if (= 1 (count trace))
+    ;; BASE CASE 
+    (stack (first trace))
+    ;; RECURSIVE CASE
+    (_unit-stack-get (rest trace) ((stack (first trace)) :stack))))
+
+(defn _unit-stack-put [trace value stack]
+
+  (if (= 1 (count trace))
+
+    ;; BASE CASE
+    (assoc stack (first trace) value)
+
+    ;; RECURSIVE CASE
+    (let [key (first trace)
+          obj (stack key)
+          updated (_unit-stack-put (rest trace) value (obj :stack))
+          obj (assoc obj :stack updated)]
+      (assoc stack key obj))))
+
+(defn unit-stack-put [trace value]
+       (swap! unit-stack-atom (fn [S] (_unit-stack-put trace value S))))
+
+(defn unit-stack-get
+  "Get a stack frame from the unit execution stack by performing
+   a depth first traverse of the stack frame according to the UUIDs
+   provided in the trace."
+  [trace]
+  (_unit-stack-get trace (deref unit-stack-atom)))
+
+(defn get-unit-stack-max-size
+  "Returns the current maximum unit execution stack size.
+   When the stack grows larger than this, the oldest frames
+   are pruned/dropped off."
+  []
+  ((deref unit-policy-atom) :stack-size))
+
+(defn get-unit-stack-curr-size
+  "Returns the current size of the unit stack. The size is
+   the number of 'top-level' execution frames, disregarding
+   the depth of each frame's own stack trace."
+  []
+  (count (deref unit-stack-atom)))
+
+(defn prune-unit-stack
+  "Removes the n oldest elements from unit execution stack."
+  [n]
+  (swap! unit-stack-atom
+         (fn [S]
+           (let [new-size (- (count S) n)]
+             (if (< new-size 1)
+               (throw (AssertionError. "Cannot prune stack to have size less than 1"))
+               (into {} (take-last new-size S)))))))
+
+(defn set-unit-stack-max-size
+  "Set the maximum execution stack size for the unit execution stack.
+   Removes older execution stack frames, if the new size is smaller than stack's current size.
+   The size corresponds to the 'top-level' of the stack, not the depth of each stack trace.
+   Stack trace depths are unbounded in size."
+  [ss]
+  (let [curr (get-unit-stack-curr-size)]
+    (when (< ss curr) (prune-unit-stack (- curr ss)))
+    (swap! unit-policy-atom (fn [P] (assoc P :stack-size ss)))))
+
+(defn add-unit-frame
+  "
+  Adds a new unit execution frame to the unit stack and
+  returns a unique identifier (uuid) for that new frame
+  corresponding to this unit's execution. The name of the
+  unit is stored as part of the frame.
+   
+  If a trace is provided, then the new frame is added
+  as a child of stack frame that is found by performing
+  a depth first traverse of the stack traces according
+  to the UUID's in the trace list. The first element of
+  the trace list correpsonds to the top-most level of the
+  stack.
+   
+  If no trace is provided, then execution frame is added
+  to the top-level of the stack.
+  "
+  ([name params trace]
+   (let [limit (get-unit-stack-max-size)
+         curr (get-unit-stack-curr-size)
+         id (generate-stack-uuid)
+         new-elem {:name name :pre nil :post nil :stack {} :params params}
+         new-trace (concat trace (list id))]
+     (when (= limit curr) (prune-unit-stack 1))
+     (unit-stack-put new-trace new-elem)
+     (when (= 0 (count trace))
+       (swap! unit-stack-atom (fn [S] (assoc S :last-frame id))))
+     id))
+
+  ;; OVERLOAD for top-level units
+  ([name params] (add-unit-frame name params '())))
+
+(defn unit-stack "Returns the current unit execution stack." [] (deref unit-stack-atom))
+
+(defn print-unit-stack "Pretty prints the current unit execution stack." [] (clojure.pprint/pprint (unit-stack)))
+
+(defn reset-unit-stack
+  "Resets the unit execution stack to be empty."
+  [] (swap! unit-stack-atom (fn [_] {})))
+
+(defn last-unit []
+  (let [S (deref unit-stack-atom)
+        last-id (S :last-frame)] (S last-id)))
+
+(defn pre?
+  "Returns the pre-condition value for the most recent 
+   top-level frame on unit execution stack."
+  [] ((last-unit) :pre))
+
+(defn post? 
+  "Returns the post-condition value for the most recent 
+   top-level frame on unit execution stack." 
+  [] ((last-unit) :post))
+
+(defn set-unit-pre
+  "Set the pre-condition value for the stack frame identified by the trace."
+  [result trace]
+  (swap!
+   unit-stack-atom
+   (fn [S]
+     (let [old-elem (_unit-stack-get trace S)
+           new-elem (assoc old-elem :pre result)]
+       (_unit-stack-put trace new-elem S)))))
+
+(defn set-unit-post
+   "Set the post-condition value for the stack frame identified by the trace."
+  [result trace] 
+  (swap!
+   unit-stack-atom
+   (fn [S]
+     (let [old-elem (_unit-stack-get trace S)
+           new-elem (assoc old-elem :post result)]
+       (_unit-stack-put trace new-elem S)))))
+
+(defn unit-policy 
+  "Returns the details of current unit execution policy."
+  [] (deref unit-policy-atom))
+
+(defn set-unit-failure-policy 
+  "Set the failure policy for unit pre- and post-conditions.
+  If set to false, then unit execution proceeds, but flags
+  are set (access via unit-pre? and unit-post?).
+  If set to FAIL, then if pre- or post-conditions are violated,
+  an exception will be thrown.
+  Default behaviour is false"
+  [policy]
+  (swap! unit-policy-atom (fn [p] (assoc p :fail policy))))
+
+(defn set-unit-check-policy
+  "Set the policy for checking pre- and post-conditions
+  for a unit. Setting to true will enable checking and setting
+  to false will disable checking. Disabling checking improves
+  performance. Checking is enabled by default. If a condition check
+  fails, then the unit failure policy is followed."
+  [policy]
+  (swap! unit-policy-atom (fn [p] (assoc p :check policy))))
+
+(defn unit-should-check? [] ((deref unit-policy-atom) :check))
+
+(defn unit-should-fail? [] 
+  (and 
+  (unit-should-check?)
+  (= ((deref unit-policy-atom) :fail) true)))
 
 (defn add-constraint! [n s]
   (swap! constraints-atom (fn [c] (assoc c n s))))
@@ -268,7 +452,7 @@
 (def conn
   (do
     (try
-      (-> (db/connect (URI. "bolt://neo4j:7687")
+      (-> (db/connect (URI. "bolt://localhost:7687")
                       "neo4j"
                       "grapevine")
           db/get-session)
@@ -288,9 +472,6 @@
 (dbquery "CREATE CONSTRAINT IF NOT EXISTS FOR (g:__Graph) REQUIRE g.tag IS UNIQUE")
 (dbquery "create index if not exists for  (g:__Graph) on g._fp")
 (dbquery "create index if not exists for  (g:Graph) on g.uid")
-
-
-
 
 ; ---------------------------------------------------
 ; DSL
@@ -1136,8 +1317,6 @@ CALL {
 (defn condition [c]
   ['cond c])
 
-
-
 (defn NAC
   "DSL form for specifying Negatic Applications Conditions (NACs)"
   [& xs]
@@ -1194,9 +1373,203 @@ CALL {
         (list 'quote pars)
         (list 'apply 'merge (list 'quote (map eval args)))))
 
+(defn unit-os
+  "Helper function for defining a unit"
+  [n params pre post prog doc rules to-exec]
+  (add-unit! n params pre post prog (first doc) rules to-exec)
+  ((intern *ns* (symbol (str (name n) "-show")) (fn [] ((deref units-atom) n))))
+  ((intern *ns* (symbol (str (name n) "-doc")) (fn [] (((deref units-atom) n) :doc))))
+  ((intern *ns* (symbol (str (name n) "-pre")) (fn [] (((deref units-atom) n) :pre))))
+  ((intern *ns* (symbol (str (name n) "-post")) (fn [] (((deref units-atom) n) :post))))
+  ((intern *ns* (symbol (str (name n) "-prog")) (fn [] (((deref units-atom) n) :prog))))
+  ((intern *ns* (symbol (str (name n) "-prog")) (fn [] (((deref units-atom) n) :prog))))
+  ((intern *ns* (symbol (str (name n) "-rules")) (fn [] (((deref units-atom) n) :rules))))
+  ((intern *ns* (symbol (str (name n) "-params")) (fn [] (((deref units-atom) n) :params))))
+  (intern *ns* (symbol (str (name n))) to-exec))
+
+(defn extract-clause [L sym] (rest (first (filter #(= (first %1) sym) L))))
+
+(defn symbol-is-unit? [sym]
+  (contains? (deref units-atom) sym))
+
+(defn inject-stack-trace-in-prog
+  "Given a graph program for execution as part of a unit, inject
+   a stack trace placeholder symbol into unit invocations and return
+   the updated graph program."
+  [prog sym-to-inject first?]
+  (let [is-list-func (and (list? prog) (symbol? (first prog)))
+        is-direct-func (symbol? prog)
+        is-direct-unit (and is-direct-func (symbol-is-unit? prog))
+        is-partial-unit (and is-list-func (symbol-is-unit? (first prog)))]
+    (cond first? (map (fn [x] (inject-stack-trace-in-prog x sym-to-inject false)) prog)
+          is-direct-unit (concat (list prog) (list sym-to-inject))
+          is-partial-unit (concat prog (list sym-to-inject))
+          is-list-func (map (fn [x] (inject-stack-trace-in-prog x sym-to-inject false)) prog)
+          :else prog)))
+
+(defmacro unit
+  "Makes a new graph transformation unit and stores the
+  name of the unit in the current namespace such that it
+  can be called like a Clojure function on an existing GRAPE."
+  [n params & args]
+  (let [pre (extract-clause args 'pre)
+        post (extract-clause args 'post)
+        prog (extract-clause args 'prog)
+        doc (extract-clause args 'doc)
+        rules (extract-clause args 'rules)
+        created-rules (if (empty? rules) nil (map #(eval %1) rules))
+        newprog (inject-stack-trace-in-prog prog 'stack-trace true)
+        pre (if (> (count pre) 0) pre (list (list 'fn ['x] 'true)))
+        post (if (> (count post) 0) post (list (list 'fn ['x] 'true)))
+        Fn (list 'unit-os
+                 (list 'quote n)
+                 (list 'quote params)
+                 (list 'quote pre)
+                 (list 'quote post)
+                 (list 'quote prog)
+                 (list 'quote doc)
+                 (list 'quote created-rules)
+                 (list 'fn
+
+                       ;; GIVEN ANON FUNCTION A LOCAL NAME
+                       '__exec-unit
+
+                       ;; OVERLOAD with STACK TRACE
+                       (list
+
+                        ;; ARGUMENTS to FUNCTION
+                        (vec (concat (list '__G) params (list 'stack-trace)))
+
+                        ;; FUNCITON BODY
+                        (list 'if (list 'unit-should-check?)
+
+                              ;; CASE: unit condition checking enabled
+                              (list 'let
+                                    ['__pre-ret (list 'every? 'true? (list (concat (list 'juxt) pre) '__G))
+                                     'frame (list 'add-unit-frame (list 'quote n) params 'stack-trace)
+                                     'stack-trace (list 'concat 'stack-trace (list 'list 'frame))]
+                                    (list 'set-unit-pre '__pre-ret 'stack-trace)
+                                    (list 'when (list 'and (list 'unit-should-fail?) (list 'not '__pre-ret))
+                                          (list 'throw (list 'AssertionError. (list 'str "Pre-condition for unit " (list 'quote n) " failed!"))))
+                                    (list 'let ['__ret (concat (list '->) (list '__G) newprog)
+                                                '__post-ret (list 'every? 'true? (list (concat (list 'juxt) post) '__ret))]
+                                          (list 'set-unit-post '__post-ret 'stack-trace)
+                                          (list 'if '__post-ret
+                                                     ;; CASE: post condition passed
+                                                '__ret
+                                                     ;; CASE: post condition failed
+                                                (list 'if (list 'unit-should-fail?)
+                                                      (list 'throw (list 'AssertionError. (list 'str "Post-condition for unit " (list 'quote n) " failed!")))
+                                                      '__ret))))
+
+                             ;; CASE: unit condition checking disabled
+                              (concat (list '->) (list '__G) prog)))
+
+                       ;; OVERLOAD without HISTORY
+                       (list
+                        (vec (concat (list '__G) params))
+                        (concat (list '__exec-unit) (list '__G) params (list '())))))]
+    Fn))
+
+(defmacro try-skip
+  "Attempt to execute unit u on GRAPE G.
+   If the unit's execution fails, then return the original GRAPE G. 
+   If the unit's execution succeeds, then return the new GRAPE. 
+   Unit failure is only detected if unit failure policy is set to FAIL;
+   otherwise, unit failures are ignored."
+  [G tryit]
+  (let [is-list-func (and (list? tryit) (symbol? (first tryit)))
+        invoke (if is-list-func
+                 (concat (list (first tryit)) (list G) (rest tryit))
+                 (concat (list tryit) (list G)))
+        body (list 'try invoke (list 'catch 'AssertionError '_ G))]
+    body))
+
+(defmacro try-empty
+  "Attempt to execute unit u on GRAPE G.
+   If the unit's execution fails, then returns an empty GRAPE (an empty list).
+   If the unit's execution succeeds, then return the resulting GRAPE.
+   Only works if unit failure policy is set to FAIL; otherwise failures
+   are ignored."
+  [G tryit]
+  (let [is-list-func (and (list? tryit) (symbol? (first tryit)))
+        invoke (if is-list-func
+                 (concat (list (first tryit)) (list G) (rest tryit))
+                 (concat (list tryit) (list G)))
+        body (list 'try invoke (list 'catch 'AssertionError '_ '()))]
+    body))
+
+(defmacro try-do
+  "Attempt to execute unit u on GRAPE G. Regardless of the outcome
+   return the result. If the unit's pre or post condition(s) fail
+   then also execute the doit unit."
+  [G tryit doit]
+  (let [try-is-list-func (and (list? tryit) (symbol? (first tryit)))
+        do-is-list-func (and (list? doit) (symbol? (first doit)))
+        invoke-try (if try-is-list-func
+                     (concat (list (first tryit)) (list G) (rest tryit))
+                     (concat (list tryit) (list G)))
+        invoke-do (if do-is-list-func
+                    (concat (list (first doit)) (list '__G2) (rest doit))
+                    (concat (list doit) (list '__G2)))
+        body (list 'let
+                   ['og-policy (list (list 'deref 'unit-policy-atom) ':fail)]
+                   (list 'set-unit-failure-policy 'false)
+                   (list 'let
+                         ['__G2 invoke-try]
+                         (list 'set-unit-failure-policy 'og-policy)
+                         (list 'if
+                               (list 'and (list 'pre?) (list 'post?))
+                               '__G2
+                               invoke-do)))] body))
 
 
 
+(defmacro try-else
+  "Attempt to execute unit tryit on input GRAPE G.
+   If the unit's execution fails, then execute the unit elseit on input GRAPE G.
+   If the unit's execution succeeds, then return that result.
+   Only works if unit failure policy is set to FAIL."
+  [G tryit elseit]
+  (let [try-is-list-func (and (list? tryit) (symbol? (first tryit)))
+        else-is-list-func (and (list? elseit) (symbol? (first elseit)))
+        invoke-try (if try-is-list-func
+                 (concat (list (first tryit)) (list G) (rest tryit))
+                 (concat (list tryit) (list G)))
+        invoke-else (if else-is-list-func
+                 (concat (list (first elseit)) (list G) (rest elseit))
+                 (concat (list elseit) (list G)))
+        body (list 'try invoke-try (list 'catch 'AssertionError '_ invoke-else))
+        _ (println body)]
+    body))
+
+(defmacro exists-graph? 
+  "Takes a list of graph constraints.
+   Produces a function takes a GRAPE returns true if there exists at least 
+   one graph in the GRAPE that satisfies the conjunction of all conditions; 
+   otherwise returns false."
+  [& conds] 
+  `#(> (count (-> %1 ~@conds)) 0))
+
+(defmacro forall-graphs? 
+  "Takes a list of graph constraints.
+  Produces a function that takes a GRAPE and returns true if all graphs
+  in the GRAPE satisfy the conjunciton of all conditions; otherwise 
+  returns false."
+  [& conds] 
+  `#(= (count (-> %1 ~@conds)) (count %1)))
+
+(defmacro empty-grape?
+  "Produces a function that takes a GRAPE and returns true if the GRAPE
+  is empty and false otherwise."
+  [] 
+  `#(= (count %1) 0))
+
+(defmacro empty-graph?
+  "Produces a function that takes a GRAPE and returns true if all graphs
+  in the GRAPE are the empty graph and false otherwise."
+  [] 
+  `#(> (count (-> %1 __has-node-)) 0))
 
 (defn query- [n params pat]
   "DSL form for specifying a graph query"
@@ -1900,4 +2273,11 @@ CALL {
     (list g)))
 
 
+;; =========================================
+;; Built-in rules and conditions that are used
+;; elsewhere in grape.core.
+;; =========================================
+
+;; used by empty-graph? to check if a graph is indeed empty.
+(constraint __has-node [] (node n))
 
