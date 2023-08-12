@@ -1548,7 +1548,7 @@ CALL {
         body (list 'try invoke (list 'catch 'AssertionError '_ '()))]
     body))
 
-(defmacro try-resume-and-do
+(defmacro try-do
   "Attempt to execute unit u on GRAPE G. Regardless of the outcome
    return the result. If the unit's pre or post condition(s) fail
    then also execute the doit unit."
@@ -1588,7 +1588,8 @@ CALL {
         invoke-else (if else-is-list-func
                  (concat (list (first elseit)) (list G) (rest elseit))
                  (concat (list elseit) (list G)))
-        body (list 'try invoke-try (list 'catch 'AssertionError '_ invoke-else))]
+        body (list 'try invoke-try (list 'catch 'AssertionError '_ invoke-else))
+        _ (println body)]
     body))
 
 (defmacro exists-graph? 
