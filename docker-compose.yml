@@ -1,0 +1,34 @@
+version: '3'
+services:
+  gv:
+    image: ghcr.io/jenshweber/grape:release
+    container_name: grapevine
+    restart: always
+    command: lein run
+    ports:
+      - 8999:8999
+      - 62222:62222
+    working_dir: /usr/src/app
+    volumes:
+      - ~/grapevine:/usr/src/app/book
+  neo4j:
+    image: arm64v8/neo4j
+    container_name: neo4j
+    restart: always
+    ports:
+      - 7474:7474
+      - 7687:7687
+    volumes:
+      - $HOME/neo4j/data:/data
+      - $HOME/neo4j/logs:/logs
+      - $HOME/neo4j/import:/var/lib/neo4j/import
+      - $HOME/neo4j/plugins:/plugins
+    environment:
+      - NEO4J_PLUGINS=["apoc"] 
+      - NEO4J_apoc_export_file_enabled=true 
+      - NEO4J_AUTH=none
+      - NEO4J_apoc_import_file_use__neo4j__config=true 
+      - NEO4J_apoc_import_file_enabled=true
+      - dbms_cypher_lenient__create__relationship=true
+
+
